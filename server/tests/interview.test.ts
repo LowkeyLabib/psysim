@@ -1,13 +1,13 @@
 import { describe, it, expect } from 'vitest';
 import { InterviewEvaluator } from '../src/interview/evaluator.js';
-import { CORE_INTERVIEW_OBJECTIVES } from '../src/interview/objectives.js';
-import { ScenarioTemplate, Message, InterviewObjectiveProgress } from '../src/types/index.js';
+import { CORE_OBJECTIVES } from '../src/knowledge/seedScenarios.js';
+import { InternalClinicalProfile, Message, Objective } from '../src/types/index.js';
 
-const mockScenario: ScenarioTemplate = {
+const mockScenario: InternalClinicalProfile = {
   id: 'scen_test',
-  categoryId: 'depressive_disorders',
-  categoryName: 'Depressive Disorders',
-  difficulty: 'BEGINNER',
+  categoryId: 'depressive',
+  categoryName: 'Depressive disorders',
+  difficulty: 'beginner',
   patient: {
     name: 'Rahim',
     age: 26,
@@ -17,7 +17,12 @@ const mockScenario: ScenarioTemplate = {
     language: 'bn',
   },
   presentingComplaint: 'Low mood',
-  openingMessage: 'Hello doctor',
+  openingMessage: {
+    en: 'Hello doctor',
+    bn: 'ডাক্তার সাহেব...',
+    banglish: 'Doctor shaheb...',
+    mixed: 'Hello doctor...',
+  },
   symptoms: ['Insomnia'],
   symptomTimeline: { onset: '1 month', duration: '1 month', progression: 'worsening' },
   psychiatricHistory: 'None',
@@ -29,72 +34,72 @@ const mockScenario: ScenarioTemplate = {
   negativeFindings: [],
   approvedDiagnosis: { name: 'MDD', icd11Code: '6A70', dsm5Code: '296.2' },
   acceptedDiagnoses: [],
-  mandatoryObjectives: CORE_INTERVIEW_OBJECTIVES.slice(0, 3), // First 3 are mandatory
+  mandatoryObjectives: CORE_OBJECTIVES,
   reviewStatus: 'APPROVED',
 };
 
 describe('InterviewEvaluator', () => {
   it('correctly detects English inquiry and marks objective completed with evidence', () => {
     const transcript: Message[] = [
-      { id: 'm1', sessionId: 's1', sender: 'patient', content: 'Hello doctor', timestamp: '1' },
-      { id: 'm2', sessionId: 's1', sender: 'student', content: 'What problem brings you in today?', timestamp: '2' },
+      { id: 'm1', role: 'patient', content: 'Hello doctor', createdAt: '1' },
+      { id: 'm2', role: 'student', content: 'What problem brings you in today?', createdAt: '2' },
     ];
 
-    const initialProgress: InterviewObjectiveProgress[] = mockScenario.mandatoryObjectives.map(o => ({
+    const initialObjectives: Objective[] = CORE_OBJECTIVES.map((o) => ({
       id: o.id,
       title: o.title,
-      description: o.description,
-      isMandatory: o.isMandatory,
-      status: 'NOT_STARTED',
+      required: o.required,
+      completed: false,
+      evidenceMessageIds: [],
+      confidence: null,
+      guidance: o.guidance,
     }));
 
-    const result = InterviewEvaluator.evaluateProgress(transcript, mockScenario, initialProgress);
-    const presentingComp = result.find(o => o.id === 'obj_presenting_complaint');
+    const result = InterviewEvaluator.evaluateProgress(transcript, mockScenario, initialObjectives);
+    const presentingComp = result.objectives.find((o) => o.id === 'o0');
 
-    expect(presentingComp?.status).toBe('COMPLETED');
-    expect(presentingComp?.evidenceQuote).toContain('What problem brings you in today?');
-    expect(presentingComp?.evidenceMessageId).toBe('m2');
+    expect(presentingComp?.completed).toBe(true);
+    expect(presentingComp?.evidenceMessageIds).toContain('m2');
   });
 
   it('correctly detects Bengali & Banglish inquiries', () => {
     const transcript: Message[] = [
-      { id: 'm1', sessionId: 's1', sender: 'patient', content: 'ডাক্তার সাহেব...', timestamp: '1' },
-      { id: 'm2', sessionId: 's1', sender: 'student', content: 'Apnar ei somossa koto din dhore shuru hoyeche?', timestamp: '2' },
+      { id: 'm1', role: 'patient', content: 'ডাক্তার সাহেব...', createdAt: '1' },
+      { id: 'm2', role: 'student', content: 'Apnar ei somossa koto din dhore shuru hoyeche?', createdAt: '2' },
     ];
 
-    const initialProgress: InterviewObjectiveProgress[] = mockScenario.mandatoryObjectives.map(o => ({
+    const initialObjectives: Objective[] = CORE_OBJECTIVES.map((o) => ({
       id: o.id,
       title: o.title,
-      description: o.description,
-      isMandatory: o.isMandatory,
-      status: 'NOT_STARTED',
+      required: o.required,
+      completed: false,
+      evidenceMessageIds: [],
+      confidence: null,
+      guidance: o.guidance,
     }));
 
-    const result = InterviewEvaluator.evaluateProgress(transcript, mockScenario, initialProgress);
-    const chronology = result.find(o => o.id === 'obj_symptom_chronology');
+    const result = InterviewEvaluator.evaluateProgress(transcript, mockScenario, initialObjectives);
+    const chronology = result.objectives.find((o) => o.id === 'o1');
 
-    expect(chronology?.status).toBe('COMPLETED');
-    expect(chronology?.evidenceMessageId).toBe('m2');
+    expect(chronology?.completed).toBe(true);
+    expect(chronology?.evidenceMessageIds).toContain('m2');
   });
 
   it('correctly locks and unlocks submission eligibility based on mandatory objectives', () => {
-    const progressIncomplete: InterviewObjectiveProgress[] = [
-      { id: 'obj_presenting_complaint', title: 'Presenting Complaint', description: '', isMandatory: true, status: 'COMPLETED' },
-      { id: 'obj_symptom_chronology', title: 'Symptom Timeline', description: '', isMandatory: true, status: 'NOT_STARTED' },
+    const objectivesIncomplete: Objective[] = [
+      { id: 'o0', title: 'Presenting complaint', required: true, completed: true, evidenceMessageIds: ['m1'], confidence: 0.9 },
+      { id: 'o1', title: 'Onset, course & severity', required: true, completed: false, evidenceMessageIds: [], confidence: null },
     ];
 
-    const gate1 = InterviewEvaluator.isSubmissionEligible(progressIncomplete);
-    expect(gate1.eligible).toBe(false);
-    expect(gate1.missingMandatory).toHaveLength(1);
-    expect(gate1.missingMandatory[0].id).toBe('obj_symptom_chronology');
+    const result1 = InterviewEvaluator.evaluateProgress([], mockScenario, objectivesIncomplete);
+    expect(result1.eligible).toBe(false);
 
-    const progressComplete: InterviewObjectiveProgress[] = [
-      { id: 'obj_presenting_complaint', title: 'Presenting Complaint', description: '', isMandatory: true, status: 'COMPLETED' },
-      { id: 'obj_symptom_chronology', title: 'Symptom Timeline', description: '', isMandatory: true, status: 'COMPLETED' },
+    const objectivesComplete: Objective[] = [
+      { id: 'o0', title: 'Presenting complaint', required: true, completed: true, evidenceMessageIds: ['m1'], confidence: 0.9 },
+      { id: 'o1', title: 'Onset, course & severity', required: true, completed: true, evidenceMessageIds: ['m2'], confidence: 0.9 },
     ];
 
-    const gate2 = InterviewEvaluator.isSubmissionEligible(progressComplete);
-    expect(gate2.eligible).toBe(true);
-    expect(gate2.missingMandatory).toHaveLength(0);
+    const result2 = InterviewEvaluator.evaluateProgress([], mockScenario, objectivesComplete);
+    expect(result2.eligible).toBe(true);
   });
 });

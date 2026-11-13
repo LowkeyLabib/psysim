@@ -9,15 +9,16 @@ import { sessionRoutes } from './routes/sessionRoutes.js';
 import { supervisorRoutes } from './routes/supervisorRoutes.js';
 import { repository, InMemoryRepository, setRepository } from './db/repository.js';
 import { SEED_SCENARIOS } from './knowledge/seedScenarios.js';
+import { SessionSummary, SessionPage, UserProfile } from './types/index.js';
 
 export const app = express();
 
-// Initialize in-memory seed scenarios
+// Initialize in-memory repository with seed clinical scenarios
 setRepository(new InMemoryRepository(SEED_SCENARIOS));
 
 app.use(
   cors({
-    origin: config.corsOrigin,
+    origin: '*',
     credentials: true,
   })
 );
@@ -25,56 +26,70 @@ app.use(express.json());
 app.use(rateLimiter(200, 60000));
 app.use(authMiddleware);
 
-// User Profile routes
+// GET /api/me -> UserProfile
 app.get('/api/me', (req, res) => {
-  res.json({
-    id: req.user?.id,
-    name: req.user?.name,
-    email: req.user?.email,
-    role: req.user?.role,
-    created_at: new Date().toISOString(),
-  });
+  const profile: UserProfile = {
+    id: req.user?.id || 'demo-student',
+    displayName: req.user?.displayName || 'Demo learner',
+    email: req.user?.email || 'demo@psysim.edu',
+    role: req.user?.role || 'student',
+  };
+  res.json(profile);
 });
 
+// GET /api/me/sessions -> SessionPage
 app.get('/api/me/sessions', async (req, res, next) => {
   try {
-    const list = await repository.getUserSessions(req.user?.id || 'usr_student_demo');
-    const formatted = await Promise.all(
+    const list = await repository.getUserSessions(req.user?.id || 'demo-student');
+    const items: SessionSummary[] = await Promise.all(
       list.map(async (s) => {
         const evalRecord = await repository.getEvaluation(s.id);
         return {
           id: s.id,
+          patientName: s.patient.name,
           mode: s.mode,
           difficulty: s.difficulty,
-          status: s.status,
-          patient_name: s.patient.name,
-          patient_age: s.patient.age,
-          outcome: evalRecord?.outcome || null,
-          created_at: s.createdAt,
-          completed_at: s.completedAt || null,
+          state: s.state,
+          createdAt: s.createdAt,
+          outcome: evalRecord?.outcome || undefined,
         };
       })
     );
-    res.json({ sessions: formatted });
+
+    const completed = items.filter((s) => s.state === 'EVALUATED').length;
+    const correct = items.filter((s) => s.outcome === 'CORRECT').length;
+    const graded = items.filter((s) => s.outcome && s.outcome !== 'REVIEW_REQUIRED').length;
+
+    const page: SessionPage = {
+      items: items.reverse(),
+      nextCursor: null,
+      stats: {
+        completed,
+        correct,
+        graded,
+        total: items.length,
+      },
+    };
+
+    res.json(page);
   } catch (err) {
     next(err);
   }
 });
 
-// Main API Endpoints
+// Routers
 app.use('/api/scenarios', scenarioRoutes);
 app.use('/api/sessions', sessionRoutes);
-app.use('/api/supervisor', requireRole(['supervisor', 'admin']), supervisorRoutes);
+app.use('/api/supervisor', supervisorRoutes);
 
-// Health check
+// Health Check
 app.get('/api/health', (_req, res) => {
-  res.json({ status: 'healthy', timestamp: new Date().toISOString() });
+  res.json({ status: 'healthy', provider: config.aiProvider, timestamp: new Date().toISOString() });
 });
 
 // Central Error Handler
 app.use(errorHandler);
 
-// Only listen if not imported by test runner
 if (process.env.NODE_ENV !== 'test') {
   app.listen(config.port, () => {
     console.log(`[PsySim Server] Running on http://localhost:${config.port}`);

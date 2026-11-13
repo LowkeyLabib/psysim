@@ -1,10 +1,11 @@
 import {
-  DiagnosticOutcome,
-  InterviewObjectiveProgress,
+  Outcome,
+  Objective,
   Message,
-  RubricDomainScore,
-  ScenarioTemplate,
-  SessionEvaluation,
+  InternalClinicalProfile,
+  SessionResult,
+  EvidenceClaim,
+  RubricFeedback,
 } from '../types/index.js';
 import { DiagnosisMatchResult } from '../diagnosis/matcher.js';
 
@@ -12,116 +13,133 @@ export class FeedbackGenerator {
   static generateEvaluation(data: {
     sessionId: string;
     submittedDiagnosis: string;
-    clinicalReasoning?: string | null;
-    scenario: ScenarioTemplate;
+    submittedReasoning?: string | null;
+    scenario: InternalClinicalProfile;
     transcript: Message[];
-    objectives: InterviewObjectiveProgress[];
+    objectives: Objective[];
     matchResult: DiagnosisMatchResult;
-  }): SessionEvaluation {
-    const { sessionId, submittedDiagnosis, clinicalReasoning, scenario, transcript, objectives, matchResult } = data;
+  }): SessionResult {
+    const { sessionId, submittedDiagnosis, submittedReasoning, scenario, transcript, objectives, matchResult } = data;
 
-    const completedCount = objectives.filter((o) => o.status === 'COMPLETED').length;
-    const totalCount = Math.max(objectives.length, 1);
-    const completionRatio = completedCount / totalCount;
+    const studentMsgs = transcript.filter((m) => m.role === 'student');
+    const studentMsgIds = studentMsgs.map((m) => m.id);
 
-    // 1. Domain Scores
-    const studentMsgs = transcript.filter((m) => m.sender === 'student');
-    const rapportScore = Math.min(5, Math.max(3, studentMsgs.length > 3 ? 5 : 4));
-    const historyScore = Math.min(5, Math.max(2, Math.round(completionRatio * 5)));
-    const psychScore = objectives.find((o) => o.id === 'obj_past_history')?.status === 'COMPLETED' ? 5 : 3;
-    const riskScore = objectives.find((o) => o.id === 'obj_safety_risk')?.status === 'COMPLETED' ? 5 : 2;
+    // Supporting findings
+    const supportingFindings: EvidenceClaim[] = scenario.symptoms.map((symptom, i) => ({
+      text: symptom,
+      messageIds: studentMsgIds.slice(0, 2),
+      caseReferences: [`SYM-${i + 1}`],
+    }));
 
-    let reasoningScore = 2;
-    if (matchResult.outcome === 'CORRECT') reasoningScore = 5;
-    else if (matchResult.outcome === 'PARTIALLY_CORRECT') reasoningScore = 3;
-    else if (matchResult.outcome === 'REVIEW_REQUIRED') reasoningScore = 3;
+    // Relevant negative findings
+    const negativeFindings: EvidenceClaim[] = scenario.negativeFindings.map((neg, i) => ({
+      text: neg,
+      messageIds: [],
+      caseReferences: [`NEG-${i + 1}`],
+    }));
 
-    const domains: RubricDomainScore[] = [
+    // Explanation
+    const explanation: EvidenceClaim = {
+      text: matchResult.explanation,
+      messageIds: studentMsgIds.slice(-2),
+      caseReferences: [scenario.approvedDiagnosis.icd11Code, scenario.approvedDiagnosis.dsm5Code],
+    };
+
+    // Learning Points
+    const learningPoints: EvidenceClaim[] = [
+      {
+        text: `Clinical Criteria: Patient meets diagnostic criteria for ${scenario.approvedDiagnosis.name} (${scenario.approvedDiagnosis.icd11Code} / DSM-5 ${scenario.approvedDiagnosis.dsm5Code}).`,
+        messageIds: [],
+        caseReferences: ['WHO-ICD11'],
+      },
+      {
+        text: `Differential Distinction: Negative findings (${scenario.negativeFindings.slice(0, 2).join('; ')}) rule out primary mood or psychotic differentials.`,
+        messageIds: [],
+        caseReferences: ['DSM5-DIFF'],
+      },
+      {
+        text: 'Chronology & Course: Eliciting exact onset and functional decline provides strong diagnostic corroboration.',
+        messageIds: [],
+        caseReferences: ['NIMH-GUIDE'],
+      },
+    ];
+
+    // Missed Objectives
+    const missedObjectives = objectives
+      .filter((o) => o.required && !o.completed)
+      .map((o) => o.title);
+
+    // Rubric
+    const completedRequired = objectives.filter((o) => o.required && o.completed).length;
+    const requiredTotal = Math.max(objectives.filter((o) => o.required).length, 1);
+    const historyScore = Math.min(5, Math.max(2, Math.round((completedRequired / requiredTotal) * 5)));
+    const reasoningScore = matchResult.outcome === 'CORRECT' ? 5 : matchResult.outcome === 'PARTIALLY_CORRECT' ? 3 : 2;
+
+    const rubric: RubricFeedback[] = [
       {
         name: 'Rapport & Empathy',
-        score: rapportScore,
-        maxScore: 5,
-        feedback:
-          rapportScore >= 4
-            ? 'Maintained professional, compassionate demeanor and actively validated patient distress.'
-            : 'Consider using more open-ended empathetic validation during early disclosure.',
+        score: studentMsgs.length >= 3 ? 5 : 4,
+        maximum: 5,
+        feedback: {
+          text: 'Maintained attentive, compassionate communication throughout the interview.',
+          messageIds: studentMsgIds.slice(0, 1),
+          caseReferences: [],
+        },
       },
       {
         name: 'History Taking',
         score: historyScore,
-        maxScore: 5,
-        feedback:
-          historyScore >= 4
-            ? 'Methodically gathered presenting complaint and chronological evolution of symptoms.'
-            : 'Some aspects of symptom onset, duration, or functional decline were incomplete.',
+        maximum: 5,
+        feedback: {
+          text: `Explored ${completedRequired} of ${requiredTotal} mandatory clinical domains.`,
+          messageIds: studentMsgIds.slice(0, 3),
+          caseReferences: [],
+        },
       },
       {
         name: 'Psychiatric & Medical Assessment',
-        score: psychScore,
-        maxScore: 5,
-        feedback:
-          psychScore >= 4
-            ? 'Effectively screened past psychiatric episodes, physical health, and medication history.'
-            : 'Be sure to systematically inquire into previous depressive or elevated mood episodes.',
+        score: objectives.find((o) => o.id === 'o3')?.completed ? 5 : 3,
+        maximum: 5,
+        feedback: {
+          text: 'Investigated past episodes, medical health, and substance history.',
+          messageIds: objectives.find((o) => o.id === 'o3')?.evidenceMessageIds || [],
+          caseReferences: [],
+        },
       },
       {
         name: 'Risk & Safety Assessment',
-        score: riskScore,
-        maxScore: 5,
-        feedback:
-          riskScore >= 4
-            ? 'Thoroughly screened for suicidal ideation, self-harm impulses, and patient protective factors.'
-            : 'Safety assessment was brief or absent; always directly screen for self-harm in psychiatric presentations.',
+        score: objectives.find((o) => o.id === 'o4')?.completed ? 5 : 2,
+        maximum: 5,
+        feedback: {
+          text: 'Directly assessed suicidal ideation and patient protective factors.',
+          messageIds: objectives.find((o) => o.id === 'o4')?.evidenceMessageIds || [],
+          caseReferences: [],
+        },
       },
       {
         name: 'Clinical Reasoning',
         score: reasoningScore,
-        maxScore: 5,
-        feedback:
-          reasoningScore >= 4
-            ? 'Synthesized elicited clinical findings into a sound, criteria-grounded diagnostic formulation.'
-            : 'Review DSM-5 / ICD-11 core diagnostic criteria and distinguishing differential features.',
+        maximum: 5,
+        feedback: {
+          text: matchResult.explanation,
+          messageIds: studentMsgIds.slice(-1),
+          caseReferences: [],
+        },
       },
     ];
 
-    const overallScore = Math.round(
-      ((rapportScore + historyScore + psychScore + riskScore + reasoningScore) / 25) * 100
-    );
-
-    // Learning Points
-    const learningPoints: string[] = [
-      `Diagnostic Ground Truth: This patient meets criteria for ${scenario.approvedDiagnosis.name} (${scenario.approvedDiagnosis.icd11Code} / DSM-5 ${scenario.approvedDiagnosis.dsm5Code}).`,
-      `Key Distinguishing Features: Review ${scenario.symptoms.slice(0, 3).join(', ')}.`,
-      `Differential Considerations: Notice negative findings (${scenario.negativeFindings.join(', ')}), which help exclude alternative diagnoses.`,
-    ];
-
-    if (matchResult.outcome === 'PARTIALLY_CORRECT') {
-      learningPoints.push(
-        'Tip: While you identified the correct broad category, always look for specific episode specifiers (e.g. single vs recurrent, severity, or current episode characteristics).'
-      );
-    }
-
     return {
-      id: `eval_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
       sessionId,
       outcome: matchResult.outcome,
       submittedDiagnosis,
-      clinicalReasoning: clinicalReasoning || undefined,
-      actualDiagnosis: {
-        name: scenario.approvedDiagnosis.name,
-        icd11Code: scenario.approvedDiagnosis.icd11Code,
-        dsm5Code: scenario.approvedDiagnosis.dsm5Code,
-        category: scenario.categoryName,
-      },
-      outcomeExplanation: matchResult.explanation,
-      keyPositiveFindings: scenario.symptoms,
-      relevantNegativeFindings: scenario.negativeFindings,
-      rubric: {
-        overallScore,
-        domains,
-      },
+      submittedReasoning: submittedReasoning || undefined,
+      approvedDiagnosis: matchResult.outcome === 'REVIEW_REQUIRED' ? null : scenario.approvedDiagnosis.name,
+      supportingFindings,
+      negativeFindings,
+      explanation,
       learningPoints,
-      evaluatedAt: new Date().toISOString(),
+      missedObjectives,
+      rubric,
     };
   }
 }

@@ -4,31 +4,38 @@ import { config } from '../config/index.js';
 
 export class GeminiProvider implements IAIProvider {
   name = 'gemini';
-  private client: GoogleGenerativeAI | null = null;
+  private defaultClient: GoogleGenerativeAI | null = null;
   private modelName: string;
 
   constructor(apiKey?: string, modelName?: string) {
     const key = apiKey || config.gemini.apiKey;
     this.modelName = modelName || config.gemini.model || 'gemini-1.5-flash';
     if (key) {
-      this.client = new GoogleGenerativeAI(key);
+      this.defaultClient = new GoogleGenerativeAI(key);
     }
+  }
+
+  private getClient(apiKeyOverride?: string): GoogleGenerativeAI {
+    if (apiKeyOverride) {
+      return new GoogleGenerativeAI(apiKeyOverride);
+    }
+    if (this.defaultClient) {
+      return this.defaultClient;
+    }
+    throw new Error(
+      'Gemini API key is not configured. Please enter your free Gemini API key in the UI settings or set GEMINI_API_KEY in server/.env.'
+    );
   }
 
   async generateChat(
     messages: ChatMessage[],
-    options?: { temperature?: number; maxTokens?: number }
+    options?: { temperature?: number; maxTokens?: number; apiKey?: string }
   ): Promise<string> {
-    if (!this.client) {
-      throw new Error(
-        'Gemini API key is not configured. Please set GEMINI_API_KEY in server/.env or switch AI_PROVIDER=mock.'
-      );
-    }
-
+    const client = this.getClient(options?.apiKey);
     const systemMessage = messages.find((m) => m.role === 'system');
     const conversationMessages = messages.filter((m) => m.role !== 'system');
 
-    const model = this.client.getGenerativeModel({
+    const model = client.getGenerativeModel({
       model: this.modelName,
       systemInstruction: systemMessage?.content,
       generationConfig: {
@@ -51,14 +58,13 @@ export class GeminiProvider implements IAIProvider {
     return response.text();
   }
 
-  async generateStructured<T>(prompt: string, systemInstruction?: string): Promise<T> {
-    if (!this.client) {
-      throw new Error(
-        'Gemini API key is not configured. Please set GEMINI_API_KEY in server/.env or switch AI_PROVIDER=mock.'
-      );
-    }
-
-    const model = this.client.getGenerativeModel({
+  async generateStructured<T>(
+    prompt: string,
+    systemInstruction?: string,
+    options?: { apiKey?: string }
+  ): Promise<T> {
+    const client = this.getClient(options?.apiKey);
+    const model = client.getGenerativeModel({
       model: this.modelName,
       systemInstruction: systemInstruction
         ? `${systemInstruction}\nRespond with valid JSON only. Do not include markdown code fence formatting.`
@@ -75,7 +81,6 @@ export class GeminiProvider implements IAIProvider {
     try {
       return JSON.parse(text) as T;
     } catch {
-      // Clean potential markdown block if model included it
       const cleaned = text.replace(/^```json\n?/, '').replace(/\n?```$/, '').trim();
       return JSON.parse(cleaned) as T;
     }

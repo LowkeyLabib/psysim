@@ -1,30 +1,24 @@
 import { Request, Response, NextFunction } from 'express';
-import { UserRole } from '../types/index.js';
-
-export interface AuthenticatedUser {
-  id: string;
-  name: string;
-  email: string;
-  role: UserRole;
-}
+import { UserProfile } from '../types/index.js';
 
 declare global {
   namespace Express {
     interface Request {
-      user?: AuthenticatedUser;
+      user?: UserProfile;
     }
   }
 }
 
 export function authMiddleware(req: Request, _res: Response, next: NextFunction) {
-  // Support custom dev headers or default to medical student persona
-  const userId = (req.headers['x-user-id'] as string) || 'usr_student_demo';
-  const role = ((req.headers['x-user-role'] as string) || 'student') as UserRole;
-  const name = (req.headers['x-user-name'] as string) || 'Dr. Student (Trainee)';
+  // Support custom auth headers, Supabase token extraction, or default to demo trainee
+  const authHeader = req.headers.authorization;
+  const userId = (req.headers['x-user-id'] as string) || 'demo-student';
+  const role = ((req.headers['x-user-role'] as string) || 'student') as UserProfile['role'];
+  const displayName = (req.headers['x-user-name'] as string) || (role === 'supervisor' ? 'Prof. Supervisor' : 'Demo learner');
 
   req.user = {
     id: userId,
-    name,
+    displayName,
     email: `${userId}@psysim.edu`,
     role,
   };
@@ -32,12 +26,14 @@ export function authMiddleware(req: Request, _res: Response, next: NextFunction)
   next();
 }
 
-export function requireRole(allowedRoles: UserRole[]) {
+export function requireRole(allowedRoles: UserProfile['role'][]) {
   return (req: Request, res: Response, next: NextFunction) => {
     if (!req.user || !allowedRoles.includes(req.user.role)) {
       res.status(403).json({
-        error: 'FORBIDDEN',
-        message: 'Insufficient clinical supervisor permissions to access this resource.',
+        error: {
+          code: 'FORBIDDEN',
+          message: 'Insufficient clinical supervisor permissions to access this resource.',
+        },
       });
       return;
     }

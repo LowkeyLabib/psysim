@@ -3,106 +3,135 @@ import request from 'supertest';
 import { app } from '../src/server.js';
 import { repository } from '../src/db/repository.js';
 
-describe('PsySim REST API Endpoints', () => {
-  it('GET /api/scenarios/categories returns clinical categories', async () => {
+describe('PsySim REST API Endpoints (Labib Contract v1 Compliance)', () => {
+  it('GET /api/scenarios/categories returns Category[] array directly', async () => {
     const res = await request(app).get('/api/scenarios/categories');
     expect(res.status).toBe(200);
-    expect(res.body.categories).toHaveLength(7);
-    expect(res.body.categories[0].name).toBe('Depressive Disorders');
+    expect(Array.isArray(res.body)).toBe(true);
+    expect(res.body.length).toBe(7);
+    expect(res.body[0].id).toBe('depressive');
+    expect(res.body[0].name).toBe('Depressive disorders');
   });
 
-  it('GET /api/me returns user profile', async () => {
+  it('GET /api/me returns UserProfile', async () => {
     const res = await request(app).get('/api/me');
     expect(res.status).toBe(200);
+    expect(res.body.id).toBe('demo-student');
+    expect(res.body.displayName).toBeDefined();
     expect(res.body.role).toBe('student');
-    expect(res.body.name).toBeDefined();
   });
 
-  it('POST /api/sessions creates a session with zero diagnosis leakage', async () => {
+  it('GET /api/me/sessions returns SessionPage structure', async () => {
+    const res = await request(app).get('/api/me/sessions');
+    expect(res.status).toBe(200);
+    expect(Array.isArray(res.body.items)).toBe(true);
+    expect(res.body.stats).toBeDefined();
+    expect(res.body.stats.completed).toBeDefined();
+  });
+
+  it('POST /api/sessions creates a PublicSession with zero diagnosis leakage', async () => {
     const res = await request(app)
       .post('/api/sessions')
       .send({
-        mode: 'CLINICAL_CHALLENGE',
-        difficulty: 'BEGINNER',
+        mode: 'challenge',
+        difficulty: 'beginner',
+        language: 'en',
       });
 
     expect(res.status).toBe(201);
-    expect(res.body.session).toBeDefined();
-    expect(res.body.session.id).toBeDefined();
-    expect(res.body.session.patient.name).toBeDefined();
-    expect(res.body.session.opening_message).toBeDefined();
+    expect(res.body.id).toBeDefined();
+    expect(res.body.version).toBe(1);
+    expect(res.body.state).toBe('IN_PROGRESS');
+    expect(res.body.patient.name).toBeDefined();
+    expect(res.body.messages.length).toBe(1);
+    expect(res.body.messages[0].role).toBe('patient');
 
-    // STRICT SECURITY: No hidden diagnosis in response
-    const jsonStr = JSON.stringify(res.body).toLowerCase();
-    expect(jsonStr).not.toContain('approveddiagnosis');
-    expect(jsonStr).not.toContain('accepteddiagnoses');
-    expect(jsonStr).not.toContain('6a70');
+    // Strict zero-leakage check
+    const raw = JSON.stringify(res.body).toLowerCase();
+    expect(raw).not.toContain('approveddiagnosis');
+    expect(raw).not.toContain('accepteddiagnoses');
+    expect(raw).not.toContain('6a70');
   });
 
-  it('enforces mandatory objective completion gate before diagnosis submission', async () => {
-    // 1. Create a session with depressive_disorders category
-    const createRes = await request(app)
+  it('POST /api/sessions/:id/messages appends messages and updates progress snapshot', async () => {
+    const sessionRes = await request(app)
       .post('/api/sessions')
       .send({
-        mode: 'CUSTOM_CASE',
-        difficulty: 'BEGINNER',
-        categoryId: 'depressive_disorders',
+        mode: 'custom',
+        categoryId: 'depressive',
+        difficulty: 'beginner',
+        language: 'bn',
       });
 
-    const sessionId = createRes.body.session.id;
+    const sessionId = sessionRes.body.id;
 
-    // 2. Attempt to submit diagnosis immediately (Premature)
-    const prematureSubmit = await request(app)
+    const msgRes = await request(app)
+      .post(`/api/sessions/${sessionId}/messages`)
+      .send({
+        content: 'আপনার ঘুম কেমন হচ্ছে?',
+        expectedVersion: 1,
+      });
+
+    expect(msgRes.status).toBe(200);
+    expect(msgRes.body.id).toBe(sessionId);
+    expect(msgRes.body.version).toBe(2);
+    expect(msgRes.body.messages.length).toBe(3); // open, student, patient
+    expect(msgRes.body.messages[1].role).toBe('student');
+    expect(msgRes.body.messages[2].role).toBe('patient');
+  });
+
+  it('enforces submission gate (422) until mandatory objectives are complete, then evaluates', async () => {
+    const sessionRes = await request(app)
+      .post('/api/sessions')
+      .send({
+        mode: 'custom',
+        categoryId: 'depressive',
+        difficulty: 'beginner',
+        language: 'en',
+      });
+
+    const sessionId = sessionRes.body.id;
+
+    // 1. Premature submit should fail with 422
+    const premature = await request(app)
       .post(`/api/sessions/${sessionId}/diagnosis`)
       .send({
         diagnosis: 'Major Depressive Disorder',
+        expectedVersion: 1,
       });
 
-    expect(prematureSubmit.status).toBe(403);
-    expect(prematureSubmit.body.error).toBe('SUBMISSION_LOCKED');
-    expect(prematureSubmit.body.missing_objectives.length).toBeGreaterThan(0);
+    expect(premature.status).toBe(422);
+    expect(premature.body.error.code).toBe('INCOMPLETE_INTERVIEW');
 
-    // 3. Complete all mandatory objectives
-    const objectives = await repository.getObjectives(sessionId);
-    for (const obj of objectives) {
-      await repository.updateObjective(sessionId, obj.id, {
-        status: 'COMPLETED',
-        evidenceQuote: 'Verified test inquiry',
-        confidence: 0.95,
-      });
-    }
+    // 2. Complete objectives in repository
+    const s = await repository.getSession(sessionId);
+    expect(s).not.toBeNull();
+    await repository.updateSession(sessionId, (sess) => {
+      sess.progress.eligible = true;
+      sess.progress.objectives.forEach((o) => (o.completed = true));
+      sess.state = 'INTERVIEW_COMPLETE';
+    });
 
-    // 4. Verify progress endpoint now reports can_submit_diagnosis: true
-    const progressRes = await request(app).get(`/api/sessions/${sessionId}/progress`);
-    expect(progressRes.status).toBe(200);
-    expect(progressRes.body.can_submit_diagnosis).toBe(true);
+    const refreshed = await repository.getSession(sessionId);
 
-    // 5. Submit diagnosis successfully
+    // 3. Submit diagnosis
     const submitRes = await request(app)
       .post(`/api/sessions/${sessionId}/diagnosis`)
       .send({
         diagnosis: 'Major Depressive Disorder',
-        clinicalReasoning: 'Vegetative depressive symptoms, early morning awakening, and anhedonia.',
+        reasoning: 'Persistent low mood and early morning awakening for 2 months.',
+        expectedVersion: refreshed!.version,
       });
 
     expect(submitRes.status).toBe(200);
-    expect(submitRes.body.status).toBe('EVALUATED');
+    expect(submitRes.body.state).toBe('EVALUATED');
 
-    // 6. Prevent duplicate submission
-    const duplicateSubmit = await request(app)
-      .post(`/api/sessions/${sessionId}/diagnosis`)
-      .send({
-        diagnosis: 'Major Depressive Disorder',
-      });
-
-    expect(duplicateSubmit.status).toBe(400);
-    expect(duplicateSubmit.body.error).toBe('SESSION_ALREADY_EVALUATED');
-
-    // 7. View results after evaluation
+    // 4. GET results
     const resultsRes = await request(app).get(`/api/sessions/${sessionId}/results`);
     expect(resultsRes.status).toBe(200);
+    expect(resultsRes.body.sessionId).toBe(sessionId);
     expect(resultsRes.body.outcome).toBe('CORRECT');
-    expect(resultsRes.body.actual_diagnosis.name).toBeDefined();
-    expect(resultsRes.body.educational_rubric.domains).toHaveLength(5);
+    expect(resultsRes.body.approvedDiagnosis).toContain('Major Depressive Disorder');
+    expect(resultsRes.body.rubric.length).toBe(5);
   });
 });

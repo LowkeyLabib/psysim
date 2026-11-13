@@ -1,5 +1,5 @@
 import { Router, Request, Response, NextFunction } from 'express';
-import { CreateSessionSchema, SendMessageSchema, SubmitDiagnosisSchema } from '../types/index.js';
+import { CreateSessionZod, SendMessageZod, SubmitDiagnosisZod } from '../types/index.js';
 import { repository } from '../db/repository.js';
 import { PatientSimulationEngine } from '../simulation/engine.js';
 import { InterviewEvaluator } from '../interview/evaluator.js';
@@ -12,12 +12,22 @@ const simulationEngine = new PatientSimulationEngine();
 // POST /api/sessions — Create a new clinical simulation session
 sessionRoutes.post('/', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const body = CreateSessionSchema.parse(req.body);
-    const userId = req.user?.id || 'usr_student_demo';
+    const idempotencyKey = req.headers['idempotency-key'] as string;
+    if (idempotencyKey) {
+      const cached = repository.getIdempotencyReceipt(idempotencyKey);
+      if (cached) {
+        res.status(200).json(cached);
+        return;
+      }
+    }
 
-    // Fetch approved scenarios
+    const body = CreateSessionZod.parse(req.body);
+    const userId = req.user?.id || 'demo-student';
+    const clientApiKey = (req.headers['x-gemini-api-key'] as string) || undefined;
+
+    // Filter approved scenarios
     let scenarios = await repository.getScenarios({
-      categoryId: body.categoryId || undefined,
+      categoryId: body.mode === 'custom' ? body.categoryId || undefined : undefined,
       difficulty: body.difficulty,
       status: 'APPROVED',
     });
@@ -28,74 +38,66 @@ sessionRoutes.post('/', async (req: Request, res: Response, next: NextFunction) 
 
     if (scenarios.length === 0) {
       res.status(404).json({
-        error: 'SCENARIO_NOT_FOUND',
-        message: 'No clinically approved psychiatric scenario matching criteria.',
+        error: {
+          code: 'SCENARIO_NOT_FOUND',
+          message: 'No clinically approved psychiatric scenario matching criteria.',
+        },
       });
       return;
     }
 
-    // Select random scenario within matched list
-    const selectedScenario = scenarios[Math.floor(Math.random() * scenarios.length)];
+    // Select scenario
+    const selected = scenarios[Math.floor(Math.random() * scenarios.length)];
+    const isLive = Boolean(clientApiKey || process.env.GEMINI_API_KEY);
 
-    // Create session in repository
     const session = await repository.createSession({
       userId,
-      scenarioId: selectedScenario.id,
+      scenario: selected,
       mode: body.mode,
       difficulty: body.difficulty,
-      patient: selectedScenario.patient,
+      language: body.language,
+      isLive,
     });
 
-    // Initialize mandatory objectives
-    await repository.initObjectives(session.id, selectedScenario);
+    if (idempotencyKey) {
+      repository.saveIdempotencyReceipt(idempotencyKey, session);
+    }
 
-    // Seed patient opening statement
-    await repository.addMessage(session.id, 'patient', selectedScenario.openingMessage);
-
-    // Return sanitized session (ZERO DIAGNOSIS LEAKAGE)
-    res.status(201).json({
-      session: {
-        id: session.id,
-        mode: session.mode,
-        difficulty: session.difficulty,
-        status: session.status,
-        patient: session.patient,
-        opening_message: selectedScenario.openingMessage,
-        created_at: session.createdAt,
-      },
-    });
+    res.status(201).json(session);
   } catch (err) {
     next(err);
   }
 });
 
-// GET /api/sessions/:id — Retrieve session metadata
+// GET /api/sessions/:id — Retrieve full public session snapshot
 sessionRoutes.get('/:id', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const session = await repository.getSession(req.params.id);
     if (!session) {
-      res.status(404).json({ error: 'SESSION_NOT_FOUND', message: 'Session does not exist.' });
+      res.status(404).json({
+        error: { code: 'NOT_FOUND', message: 'Session does not exist.' },
+      });
       return;
     }
 
-    res.json({
-      id: session.id,
-      status: session.status,
-      mode: session.mode,
-      difficulty: session.difficulty,
-      patient: session.patient,
-      created_at: session.createdAt,
-    });
+    res.json(session);
   } catch (err) {
     next(err);
   }
 });
 
-// GET /api/sessions/:id/messages — Retrieve conversation transcript
+// GET /api/sessions/:id/messages — Retrieve transcript messages
 sessionRoutes.get('/:id/messages', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const messages = await repository.getMessages(req.params.id);
-    res.json({ messages });
+    const session = await repository.getSession(req.params.id);
+    if (!session) {
+      res.status(404).json({
+        error: { code: 'NOT_FOUND', message: 'Session does not exist.' },
+      });
+      return;
+    }
+
+    res.json(session.messages);
   } catch (err) {
     next(err);
   }
@@ -104,202 +106,251 @@ sessionRoutes.get('/:id/messages', async (req: Request, res: Response, next: Nex
 // POST /api/sessions/:id/messages — Send student message & receive patient response
 sessionRoutes.post('/:id/messages', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const body = SendMessageSchema.parse(req.body);
+    const idempotencyKey = req.headers['idempotency-key'] as string;
+    if (idempotencyKey) {
+      const cached = repository.getIdempotencyReceipt(idempotencyKey);
+      if (cached) {
+        res.status(200).json(cached);
+        return;
+      }
+    }
+
+    const body = SendMessageZod.parse(req.body);
     const session = await repository.getSession(req.params.id);
 
     if (!session) {
-      res.status(404).json({ error: 'SESSION_NOT_FOUND', message: 'Session does not exist.' });
-      return;
-    }
-
-    if (session.status === 'DIAGNOSIS_SUBMITTED' || session.status === 'EVALUATED') {
-      res.status(400).json({
-        error: 'SESSION_CONCLUDED',
-        message: 'This consultation session is already finalized and cannot receive more messages.',
+      res.status(404).json({
+        error: { code: 'NOT_FOUND', message: 'Session does not exist.' },
       });
       return;
     }
 
-    const scenario = await repository.getScenario(session.scenarioId);
-    if (!scenario) {
-      res.status(500).json({ error: 'SCENARIO_MISSING', message: 'Scenario template missing.' });
+    if (!['IN_PROGRESS', 'INTERVIEW_COMPLETE'].includes(session.state)) {
+      res.status(409).json({
+        error: { code: 'SESSION_FINALIZED', message: 'This consultation is already finalized.' },
+      });
       return;
     }
 
-    // 1. Record student message
-    await repository.addMessage(session.id, 'student', body.content);
-
-    // 2. Update session state to IN_PROGRESS if first exchange
-    if (session.status === 'CREATED') {
-      await repository.updateSessionStatus(session.id, 'IN_PROGRESS');
+    if (body.expectedVersion !== undefined && body.expectedVersion !== session.version) {
+      res.status(409).json({
+        error: {
+          code: 'VERSION_CONFLICT',
+          message: 'Session has changed. Refresh before continuing.',
+        },
+      });
+      return;
     }
 
-    // 3. Generate patient response from AI engine
-    const chatHistory = await repository.getMessages(session.id);
-    const patientReply = await simulationEngine.generatePatientResponse(
+    const scenario = await repository.getScenario(session.id);
+    if (!scenario) {
+      res.status(500).json({
+        error: { code: 'SCENARIO_MISSING', message: 'Scenario profile is missing.' },
+      });
+      return;
+    }
+
+    const clientApiKey = (req.headers['x-gemini-api-key'] as string) || undefined;
+    const now = new Date().toISOString();
+
+    // 1. Append student message
+    const studentMsg = {
+      id: `msg_stu_${Date.now()}_${Math.random().toString(36).substring(2, 5)}`,
+      role: 'student' as const,
+      content: body.content.trim(),
+      createdAt: now,
+    };
+    session.messages.push(studentMsg);
+
+    // 2. Generate patient response
+    const { response: patientContent, isLive } = await simulationEngine.generatePatientResponse(
       scenario,
-      chatHistory,
-      body.content
+      session.messages,
+      body.content,
+      session.language,
+      clientApiKey
     );
 
-    const savedPatientMsg = await repository.addMessage(session.id, 'patient', patientReply);
+    const patientMsg = {
+      id: `msg_pat_${Date.now()}_${Math.random().toString(36).substring(2, 5)}`,
+      role: 'patient' as const,
+      content: patientContent,
+      createdAt: new Date().toISOString(),
+    };
+    session.messages.push(patientMsg);
 
-    // 4. Update transcript and evaluate interview objectives
-    const updatedHistory = await repository.getMessages(session.id);
-    const currentObjectives = await repository.getObjectives(session.id);
-    const evaluatedObjectives = InterviewEvaluator.evaluateProgress(
-      updatedHistory,
+    // 3. Evaluate progress
+    const evalProgress = InterviewEvaluator.evaluateProgress(
+      session.messages,
       scenario,
-      currentObjectives
+      session.progress.objectives
     );
+    session.progress = evalProgress;
 
-    for (const obj of evaluatedObjectives) {
-      await repository.updateObjective(session.id, obj.id, obj);
+    if (evalProgress.eligible && session.state === 'IN_PROGRESS') {
+      session.state = 'INTERVIEW_COMPLETE';
     }
 
-    // 5. Check if all mandatory objectives are completed
-    const eligibility = InterviewEvaluator.isSubmissionEligible(evaluatedObjectives);
-    if (eligibility.eligible && session.status === 'IN_PROGRESS') {
-      await repository.updateSessionStatus(session.id, 'INTERVIEW_COMPLETE');
+    if (isLive) {
+      session.simulation = 'live';
     }
 
-    const mandatoryList = evaluatedObjectives.filter((o) => o.isMandatory);
-    const completedCount = mandatoryList.filter((o) => o.status === 'COMPLETED').length;
-
-    res.json({
-      patient_message: savedPatientMsg,
-      progress: {
-        interview_complete: eligibility.eligible,
-        completed_mandatory_count: completedCount,
-        total_mandatory_count: mandatoryList.length,
-      },
+    // 4. Commit session
+    const updated = await repository.updateSession(session.id, (s) => {
+      s.messages = session.messages;
+      s.progress = session.progress;
+      s.state = session.state;
+      s.simulation = session.simulation;
     });
+
+    if (idempotencyKey && updated) {
+      repository.saveIdempotencyReceipt(idempotencyKey, updated);
+    }
+
+    res.status(200).json(updated);
   } catch (err) {
     next(err);
   }
 });
 
-// GET /api/sessions/:id/progress — Check interview objective progress & submission eligibility
+// GET /api/sessions/:id/progress — Check interview objectives progress
 sessionRoutes.get('/:id/progress', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const session = await repository.getSession(req.params.id);
     if (!session) {
-      res.status(404).json({ error: 'SESSION_NOT_FOUND', message: 'Session does not exist.' });
+      res.status(404).json({
+        error: { code: 'NOT_FOUND', message: 'Session does not exist.' },
+      });
       return;
     }
 
-    const objectives = await repository.getObjectives(session.id);
-    const eligibility = InterviewEvaluator.isSubmissionEligible(objectives);
-
-    res.json({
-      interview_complete: eligibility.eligible,
-      can_submit_diagnosis: eligibility.eligible && session.status !== 'EVALUATED',
-      objectives,
-    });
+    res.json(session.progress);
   } catch (err) {
     next(err);
   }
 });
 
-// POST /api/sessions/:id/diagnosis — Submit final diagnosis
+// POST /api/sessions/:id/diagnosis — Submit final diagnostic formulation
 sessionRoutes.post('/:id/diagnosis', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const body = SubmitDiagnosisSchema.parse(req.body);
+    const idempotencyKey = req.headers['idempotency-key'] as string;
+    if (idempotencyKey) {
+      const cached = repository.getIdempotencyReceipt(idempotencyKey);
+      if (cached) {
+        res.status(200).json(cached);
+        return;
+      }
+    }
+
+    const body = SubmitDiagnosisZod.parse(req.body);
     const session = await repository.getSession(req.params.id);
 
     if (!session) {
-      res.status(404).json({ error: 'SESSION_NOT_FOUND', message: 'Session does not exist.' });
-      return;
-    }
-
-    if (session.status === 'EVALUATED' || session.status === 'DIAGNOSIS_SUBMITTED') {
-      res.status(400).json({
-        error: 'SESSION_ALREADY_EVALUATED',
-        message: 'A final diagnosis has already been submitted and evaluated for this session.',
+      res.status(404).json({
+        error: { code: 'NOT_FOUND', message: 'Session does not exist.' },
       });
       return;
     }
 
-    const objectives = await repository.getObjectives(session.id);
-    const eligibility = InterviewEvaluator.isSubmissionEligible(objectives);
-
-    // GATE: Block premature diagnosis submission
-    if (!eligibility.eligible) {
-      res.status(403).json({
-        error: 'SUBMISSION_LOCKED',
-        message: 'Mandatory clinical interview objectives have not been completed.',
-        missing_objectives: eligibility.missingMandatory.map((m) => m.title),
+    if (session.state === 'EVALUATED' || session.state === 'DIAGNOSIS_SUBMITTED') {
+      res.status(409).json({
+        error: {
+          code: 'ALREADY_EVALUATED',
+          message: 'A final diagnosis has already been submitted for this session.',
+        },
       });
       return;
     }
 
-    const scenario = await repository.getScenario(session.scenarioId);
+    if (session.state !== 'INTERVIEW_COMPLETE' || !session.progress.eligible) {
+      res.status(422).json({
+        error: {
+          code: 'INCOMPLETE_INTERVIEW',
+          message: 'Complete the required interview areas before submitting your diagnosis.',
+        },
+      });
+      return;
+    }
+
+    if (body.expectedVersion !== undefined && body.expectedVersion !== session.version) {
+      res.status(409).json({
+        error: {
+          code: 'VERSION_CONFLICT',
+          message: 'Session has changed. Refresh before submitting.',
+        },
+      });
+      return;
+    }
+
+    const scenario = await repository.getScenario(session.id);
     if (!scenario) {
-      res.status(500).json({ error: 'SCENARIO_MISSING', message: 'Scenario template missing.' });
+      res.status(500).json({
+        error: { code: 'SCENARIO_MISSING', message: 'Scenario profile missing.' },
+      });
       return;
     }
 
-    const transcript = await repository.getMessages(session.id);
+    // Match diagnosis
     const matchResult = DiagnosisMatcher.evaluate(body.diagnosis, scenario);
 
+    // Generate educational rubric and claims
     const evaluation = FeedbackGenerator.generateEvaluation({
       sessionId: session.id,
       submittedDiagnosis: body.diagnosis,
-      clinicalReasoning: body.clinicalReasoning,
+      submittedReasoning: body.reasoning,
       scenario,
-      transcript,
-      objectives,
+      transcript: session.messages,
+      objectives: session.progress.objectives,
       matchResult,
     });
 
     await repository.saveEvaluation(evaluation);
-    await repository.updateSessionStatus(session.id, 'EVALUATED');
 
-    res.json({
-      status: 'EVALUATED',
-      evaluation_id: evaluation.id,
+    // Update session state
+    const updated = await repository.updateSession(session.id, (s) => {
+      s.state = 'EVALUATED';
     });
+
+    if (idempotencyKey && updated) {
+      repository.saveIdempotencyReceipt(idempotencyKey, updated);
+    }
+
+    res.status(200).json(updated);
   } catch (err) {
     next(err);
   }
 });
 
-// GET /api/sessions/:id/results — View post-session evaluation & actual diagnosis
+// GET /api/sessions/:id/results — Retrieve post-session clinical results & feedback
 sessionRoutes.get('/:id/results', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const session = await repository.getSession(req.params.id);
     if (!session) {
-      res.status(404).json({ error: 'SESSION_NOT_FOUND', message: 'Session does not exist.' });
+      res.status(404).json({
+        error: { code: 'NOT_FOUND', message: 'Session does not exist.' },
+      });
       return;
     }
 
-    if (session.status !== 'EVALUATED') {
-      res.status(403).json({
-        error: 'NOT_EVALUATED',
-        message: 'Results become visible only after diagnosis submission is finalized.',
+    if (session.state !== 'EVALUATED') {
+      res.status(409).json({
+        error: {
+          code: 'NOT_YET_EVALUATED',
+          message: 'Session evaluation is still in progress.',
+        },
       });
       return;
     }
 
     const evaluation = await repository.getEvaluation(session.id);
     if (!evaluation) {
-      res.status(404).json({ error: 'EVALUATION_NOT_FOUND', message: 'Evaluation missing.' });
+      res.status(404).json({
+        error: { code: 'EVALUATION_MISSING', message: 'Evaluation results not found.' },
+      });
       return;
     }
 
-    res.json({
-      session_id: session.id,
-      outcome: evaluation.outcome,
-      actual_diagnosis: evaluation.actualDiagnosis,
-      submitted_diagnosis: evaluation.submittedDiagnosis,
-      clinical_reasoning: evaluation.clinicalReasoning,
-      outcome_explanation: evaluation.outcomeExplanation,
-      key_positive_findings: evaluation.keyPositiveFindings,
-      relevant_negative_findings: evaluation.relevantNegativeFindings,
-      educational_rubric: evaluation.rubric,
-      learning_points: evaluation.learningPoints,
-      evaluated_at: evaluation.evaluatedAt,
-    });
+    res.json(evaluation);
   } catch (err) {
     next(err);
   }

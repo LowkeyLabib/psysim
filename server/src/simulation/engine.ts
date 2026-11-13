@@ -3,83 +3,85 @@ import { GeminiProvider } from '../ai/gemini.js';
 import { GroqProvider } from '../ai/groq.js';
 import { MockSimulationProvider } from '../ai/mock.js';
 import { config } from '../config/index.js';
-import { ScenarioTemplate, Message } from '../types/index.js';
+import { InternalClinicalProfile, Message, Language } from '../types/index.js';
 import { buildPatientSystemPrompt } from './prompts.js';
 
 export class PatientSimulationEngine {
-  private provider: IAIProvider;
+  private defaultProvider: IAIProvider;
+  private geminiProvider: GeminiProvider;
 
   constructor(customProvider?: IAIProvider) {
+    this.geminiProvider = new GeminiProvider();
     if (customProvider) {
-      this.provider = customProvider;
+      this.defaultProvider = customProvider;
     } else {
       switch (config.aiProvider) {
         case 'gemini':
-          this.provider = new GeminiProvider();
+          this.defaultProvider = this.geminiProvider;
           break;
         case 'groq':
-          this.provider = new GroqProvider();
+          this.defaultProvider = new GroqProvider();
           break;
         case 'mock':
         default:
-          this.provider = new MockSimulationProvider();
+          this.defaultProvider = new MockSimulationProvider();
           break;
       }
     }
   }
 
-  getProviderName(): string {
-    return this.provider.name;
-  }
-
   async generatePatientResponse(
-    scenario: ScenarioTemplate,
+    scenario: InternalClinicalProfile,
     chatHistory: Message[],
-    newStudentMessage: string
-  ): Promise<string> {
-    const systemInstruction = buildPatientSystemPrompt(scenario);
+    newStudentMessage: string,
+    language: Language,
+    apiKeyOverride?: string
+  ): Promise<{ response: string; isLive: boolean }> {
+    const systemInstruction = buildPatientSystemPrompt(scenario, language);
 
     const chatMessages: ChatMessage[] = [
       { role: 'system', content: systemInstruction },
     ];
 
-    // Add prior conversation messages
     for (const msg of chatHistory) {
       chatMessages.push({
-        role: msg.sender === 'patient' ? 'assistant' : 'user',
+        role: msg.role === 'patient' ? 'assistant' : 'user',
         content: msg.content,
       });
     }
 
-    // Add current user message
     chatMessages.push({
       role: 'user',
       content: newStudentMessage,
     });
 
-    try {
-      let response = await this.provider.generateChat(chatMessages, {
-        temperature: 0.65,
-        maxTokens: 500,
-      });
+    const activeApiKey = apiKeyOverride || config.gemini.apiKey;
 
-      // Post-generation sanity check to ensure zero diagnosis leakage
-      const diagnosisName = scenario.approvedDiagnosis.name.toLowerCase();
-      if (response.toLowerCase().includes(diagnosisName)) {
-        // Strip out or replace if the AI accidentally uttered the diagnosis
-        response = scenario.patient.language === 'bn'
-          ? 'ডাক্তার সাহেব, আমার আসলে খুব অসুস্থ লাগছে। আপনি কি আমাকে সাহায্য করতে পারবেন?'
-          : "Doctor, I am really not feeling well. Can you please help me understand what is going on?";
-      }
+    // If an API key is available, use real Gemini AI!
+    if (activeApiKey) {
+      try {
+        let response = await this.geminiProvider.generateChat(chatMessages, {
+          temperature: 0.7,
+          maxTokens: 500,
+          apiKey: activeApiKey,
+        });
 
-      return response.trim();
-    } catch (err: any) {
-      // In case live AI throws quota/network errors, fallback gracefully to mock provider
-      if (this.provider.name !== 'mock') {
-        const mockFallback = new MockSimulationProvider();
-        return await mockFallback.generateChat(chatMessages);
+        const diagnosisName = scenario.approvedDiagnosis.name.toLowerCase();
+        if (response.toLowerCase().includes(diagnosisName)) {
+          response = (language === 'bn' || language === 'banglish')
+            ? 'ডাক্তার সাহেব, আমার আসলে খুব অসুস্থ লাগছে। আপনি কি আমাকে সাহায্য করতে পারবেন?'
+            : "Doctor, I am really not feeling well. Can you please help me understand what is going on?";
+        }
+
+        return { response: response.trim(), isLive: true };
+      } catch (err: any) {
+        console.warn('[PsySim AI Engine] Live Gemini call encountered error, falling back to clinical mock:', err?.message || err);
       }
-      throw err;
     }
+
+    // Fallback to deterministic clinical mock provider
+    const mock = new MockSimulationProvider();
+    const fallbackResponse = await mock.generateChat(chatMessages);
+    return { response: fallbackResponse.trim(), isLive: false };
   }
 }

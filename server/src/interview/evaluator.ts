@@ -1,89 +1,42 @@
-import {
-  Message,
-  InterviewObjectiveProgress,
-  ScenarioTemplate,
-} from '../types/index.js';
+import { Message, Objective, InternalClinicalProfile, InterviewProgress } from '../types/index.js';
 
 export class InterviewEvaluator {
-  /**
-   * Evaluates the current conversation transcript against the scenario's interview objectives.
-   * Uses clinical keywords, semantic cues, and transcript pair evidence.
-   */
   static evaluateProgress(
     transcript: Message[],
-    scenario: ScenarioTemplate,
-    currentProgress: InterviewObjectiveProgress[]
-  ): InterviewObjectiveProgress[] {
-    const updatedProgress: InterviewObjectiveProgress[] = currentProgress.map((obj) => ({
-      ...obj,
-    }));
+    scenario: InternalClinicalProfile,
+    currentObjectives: Objective[]
+  ): InterviewProgress {
+    const updated = currentObjectives.map((o) => ({ ...o, evidenceMessageIds: [...o.evidenceMessageIds] }));
+    const studentMessages = transcript.filter((m) => m.role === 'student');
 
-    // Find student messages to evaluate what clinical inquiries have been made
-    const studentMessages = transcript.filter((m) => m.sender === 'student');
+    for (const obj of updated) {
+      if (obj.completed) continue;
 
-    for (const objProg of updatedProgress) {
-      if (objProg.status === 'COMPLETED') {
-        continue; // Keep already completed objectives stable
-      }
+      const def = scenario.mandatoryObjectives.find((o) => o.id === obj.id);
+      if (!def) continue;
 
-      const definition = scenario.mandatoryObjectives.find((o) => o.id === objProg.id);
-      if (!definition) continue;
-
-      const keywordsEn = definition.keywordsEn || [];
-      const keywordsBn = definition.keywordsBn || [];
-      const allKeywords = [...keywordsEn, ...keywordsBn].map((k) => k.toLowerCase());
-
-      let matchedEvidence: { msg: Message; quote: string; confidence: number } | null = null;
+      const allKeywords = [...(def.keywordsEn || []), ...(def.keywordsBn || [])].map((k) => k.toLowerCase());
 
       for (const msg of studentMessages) {
         const text = msg.content.toLowerCase();
+        const matched = allKeywords.some((kw) => text.includes(kw));
 
-        for (const kw of allKeywords) {
-          if (text.includes(kw)) {
-            matchedEvidence = {
-              msg,
-              quote: msg.content,
-              confidence: 0.92,
-            };
-            break;
+        if (matched) {
+          obj.completed = true;
+          obj.confidence = 0.92;
+          if (!obj.evidenceMessageIds.includes(msg.id)) {
+            obj.evidenceMessageIds.push(msg.id);
           }
+          break;
         }
-
-        if (matchedEvidence) break;
-      }
-
-      if (matchedEvidence) {
-        objProg.status = 'COMPLETED';
-        objProg.evidenceQuote = matchedEvidence.quote;
-        objProg.evidenceMessageId = matchedEvidence.msg.id;
-        objProg.confidence = matchedEvidence.confidence;
-      } else if (studentMessages.length > 0) {
-        // If student has begun interviewing but this domain isn't satisfied yet
-        objProg.status = 'NOT_STARTED';
       }
     }
 
-    return updatedProgress;
-  }
-
-  /**
-   * Authority check for whether student has satisfied all mandatory interview objectives.
-   */
-  static isSubmissionEligible(objectives: InterviewObjectiveProgress[]): {
-    eligible: boolean;
-    missingMandatory: { id: string; title: string }[];
-  } {
-    const missing: { id: string; title: string }[] = [];
-
-    for (const obj of objectives) {
-      if (obj.isMandatory && obj.status !== 'COMPLETED') {
-        missing.push({ id: obj.id, title: obj.title });
-      }
-    }
+    const eligible = updated.filter((o) => o.required).every((o) => o.completed);
 
     return {
-      eligible: missing.length === 0,
-      missingMandatory: missing,
+      eligible,
+      objectives: updated,
     };
   }
 }

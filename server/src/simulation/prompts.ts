@@ -1,8 +1,8 @@
-import { ScenarioTemplate } from '../types/index.js';
+import { InternalClinicalProfile, Language } from '../types/index.js';
 
-export function buildPatientSystemPrompt(scenario: ScenarioTemplate): string {
+export function buildPatientSystemPrompt(scenario: InternalClinicalProfile, language: Language): string {
   const p = scenario.patient;
-  const isBn = p.language === 'bn';
+  const isBn = language === 'bn' || language === 'banglish' || language === 'mixed';
 
   return `You are simulating a psychiatric patient named ${p.name} in a clinical training interview for a medical student or trainee psychiatrist.
 
@@ -12,7 +12,7 @@ export function buildPatientSystemPrompt(scenario: ScenarioTemplate): string {
 - Gender: ${p.gender}
 - Occupation: ${p.occupation}
 - Personality & Affect: ${p.personality}
-- Preferred Language: ${isBn ? 'Bengali (বাংলা) with natural colloquial tone, also understand English and Banglish' : 'English'}
+- Selected Interview Language: ${language} (${isBn ? 'Bengali / Banglish supported with authentic Bangladeshi conversational expressions' : 'English'})
 
 ### FIXED CLINICAL SCENARIO (IMMUTABLE GROUND TRUTH)
 - Presenting Complaint: "${scenario.presentingComplaint}"

@@ -1,69 +1,70 @@
 import { z } from 'zod';
+import type {
+  Mode,
+  Difficulty,
+  Language,
+  SessionState,
+  Outcome,
+  UserProfile,
+  Category,
+  CreateSessionInput,
+  Message,
+  Objective,
+  InterviewProgress,
+  PublicSession,
+  SessionSummary,
+  SessionPage,
+  DiagnosisInput,
+  EvidenceClaim,
+  RubricFeedback,
+  SessionResult,
+  ScenarioObjective,
+  RubricDefinition,
+  ScenarioInput,
+  ScenarioDraft,
+} from './contracts.js';
 
-export type ApplicationMode = 'CLINICAL_CHALLENGE' | 'CUSTOM_CASE';
-export type DifficultyLevel = 'BEGINNER' | 'INTERMEDIATE' | 'ADVANCED';
-export type SupportedLanguage = 'en' | 'bn' | 'auto';
-export type UserRole = 'student' | 'supervisor' | 'admin';
+export type {
+  Mode,
+  Difficulty,
+  Language,
+  SessionState,
+  Outcome,
+  UserProfile,
+  Category,
+  CreateSessionInput,
+  Message,
+  Objective,
+  InterviewProgress,
+  PublicSession,
+  SessionSummary,
+  SessionPage,
+  DiagnosisInput,
+  EvidenceClaim,
+  RubricFeedback,
+  SessionResult,
+  ScenarioObjective,
+  RubricDefinition,
+  ScenarioInput,
+  ScenarioDraft,
+};
 
-export type SessionStatus =
-  | 'CREATED'
-  | 'IN_PROGRESS'
-  | 'INTERVIEW_COMPLETE'
-  | 'DIAGNOSIS_SUBMITTED'
-  | 'EVALUATED'
-  | 'ABANDONED';
-
-export type ObjectiveStatus = 'NOT_STARTED' | 'IN_PROGRESS' | 'COMPLETED';
-
-export type DiagnosticOutcome =
-  | 'CORRECT'
-  | 'PARTIALLY_CORRECT'
-  | 'INCORRECT'
-  | 'REVIEW_REQUIRED';
-
-export interface PatientDemographics {
-  name: string;
-  age: number;
-  gender: 'male' | 'female' | 'other';
-  occupation: string;
-  personality: string;
-  language: SupportedLanguage;
-}
-
-export interface ClinicalFinding {
-  domain: string;
-  description: string;
-  isPositive: boolean;
-}
-
-export interface InterviewObjectiveDefinition {
-  id: string;
-  title: string;
-  description: string;
-  isMandatory: boolean;
-  keywordsEn?: string[];
-  keywordsBn?: string[];
-}
-
-export interface InterviewObjectiveProgress {
-  id: string;
-  title: string;
-  description: string;
-  isMandatory: boolean;
-  status: ObjectiveStatus;
-  evidenceQuote?: string;
-  evidenceMessageId?: string;
-  confidence?: number;
-}
-
-export interface ScenarioTemplate {
+// Internal Clinical Ground-Truth Profile (never exposed to student before evaluation)
+export interface InternalClinicalProfile {
   id: string;
   categoryId: string;
   categoryName: string;
-  difficulty: DifficultyLevel;
-  patient: PatientDemographics;
+  difficulty: Difficulty;
+  patient: {
+    name: string;
+    age: number;
+    gender: 'male' | 'female' | 'other';
+    occupation: string;
+    personality: string;
+    language: Language;
+  };
   presentingComplaint: string;
-  openingMessage: string;
+  openingMessage: Record<Language, string>;
   symptoms: string[];
   symptomTimeline: {
     onset: string;
@@ -90,76 +91,39 @@ export interface ScenarioTemplate {
     isPartial?: boolean;
     synonyms: string[];
   }[];
-  mandatoryObjectives: InterviewObjectiveDefinition[];
+  mandatoryObjectives: {
+    id: string;
+    title: string;
+    guidance: string;
+    required: boolean;
+    criteria: string;
+    keywordsEn?: string[];
+    keywordsBn?: string[];
+  }[];
   reviewStatus: 'DRAFT' | 'PENDING_REVIEW' | 'APPROVED' | 'REJECTED';
 }
 
-export interface Message {
-  id: string;
-  sessionId: string;
-  sender: 'patient' | 'student' | 'system';
-  content: string;
-  timestamp: string;
-}
-
-export interface RubricDomainScore {
-  name: string;
-  score: number; // 1-5
-  maxScore: number;
-  feedback: string;
-  evidenceQuotes?: string[];
-}
-
-export interface SessionEvaluation {
-  id: string;
-  sessionId: string;
-  outcome: DiagnosticOutcome;
-  submittedDiagnosis: string;
-  clinicalReasoning?: string;
-  actualDiagnosis: {
-    name: string;
-    icd11Code: string;
-    dsm5Code: string;
-    category: string;
-  };
-  outcomeExplanation: string;
-  keyPositiveFindings: string[];
-  relevantNegativeFindings: string[];
-  rubric: {
-    overallScore: number; // 0-100
-    domains: RubricDomainScore[];
-  };
-  learningPoints: string[];
-  evaluatedAt: string;
-}
-
-export interface Session {
-  id: string;
-  userId: string;
-  scenarioId: string;
-  mode: ApplicationMode;
-  difficulty: DifficultyLevel;
-  status: SessionStatus;
-  patient: PatientDemographics;
-  createdAt: string;
-  updatedAt: string;
-  completedAt?: string;
-  // Note: Hidden clinical answers are stored in the scenario template, not the public session object
-}
-
-// Zod Validation Schemas
-export const CreateSessionSchema = z.object({
-  mode: z.enum(['CLINICAL_CHALLENGE', 'CUSTOM_CASE']),
-  difficulty: z.enum(['BEGINNER', 'INTERMEDIATE', 'ADVANCED']),
+// Zod Validation Schemas matching Labib's contract
+export const CreateSessionZod = z.object({
+  mode: z.enum(['challenge', 'custom']),
+  difficulty: z.enum(['beginner', 'intermediate', 'advanced']),
+  language: z.enum(['en', 'bn', 'banglish', 'mixed']).default('en'),
   categoryId: z.string().optional().nullable(),
-  language: z.enum(['en', 'bn', 'auto']).default('auto'),
 });
 
-export const SendMessageSchema = z.object({
-  content: z.string().min(1, 'Message cannot be empty').max(2000, 'Message too long'),
+export const SendMessageZod = z.object({
+  content: z.string().min(1, 'Message cannot be empty').max(4000, 'Message cannot exceed 4,000 characters'),
+  expectedVersion: z.number().int().nonnegative().optional(),
 });
 
-export const SubmitDiagnosisSchema = z.object({
-  diagnosis: z.string().min(1, 'Diagnosis cannot be empty').max(300, 'Diagnosis too long'),
-  clinicalReasoning: z.string().max(2000).optional().nullable(),
+export const SubmitDiagnosisZod = z.object({
+  diagnosis: z.string().min(1, 'Diagnosis cannot be empty').max(500, 'Diagnosis cannot exceed 500 characters'),
+  reasoning: z.string().max(4000).optional().nullable(),
+  expectedVersion: z.number().int().nonnegative().optional(),
+});
+
+export const ReviewScenarioZod = z.object({
+  expectedVersion: z.number().int().nonnegative(),
+  decision: z.enum(['APPROVED', 'REJECTED']),
+  reviewNote: z.string().min(1, 'Review note is required'),
 });

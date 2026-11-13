@@ -1,51 +1,92 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { repository } from '../db/repository.js';
-import { OFFICIAL_KNOWLEDGE_SOURCES } from '../knowledge/sources.js';
-import { ScenarioTemplate } from '../types/index.js';
+import { ReviewScenarioZod, ScenarioDraft } from '../types/index.js';
 
 export const supervisorRoutes = Router();
 
-// GET /api/supervisor/scenarios
+// GET /api/supervisor/scenarios -> ScenarioDraft[]
 supervisorRoutes.get('/scenarios', async (_req: Request, res: Response, next: NextFunction) => {
   try {
-    const list = await repository.getScenarios();
-    res.json({ scenarios: list });
+    const list = await repository.getScenarioDrafts();
+    res.json(list);
   } catch (err) {
     next(err);
   }
 });
 
-// POST /api/supervisor/scenarios
+// POST /api/supervisor/scenarios -> ScenarioDraft
 supervisorRoutes.post('/scenarios', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const scenarioData: ScenarioTemplate = {
-      ...req.body,
-      id: req.body.id || `scen_sup_${Date.now()}`,
-      reviewStatus: 'PENDING_REVIEW',
+    const draft: ScenarioDraft = {
+      id: `scen_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      version: 1,
+      title: req.body.title || 'Untitled Scenario',
+      categoryId: req.body.categoryId || 'depressive',
+      difficulty: req.body.difficulty || 'beginner',
+      status: 'PENDING_REVIEW',
+      clinicalProfile: req.body.clinicalProfile || {},
+      objectives: req.body.objectives || [],
+      rubric: req.body.rubric || [],
+      sourceReferences: req.body.sourceReferences || [],
     };
-    const saved = await repository.saveScenario(scenarioData);
-    res.status(201).json({ scenario: saved });
+    const saved = await repository.saveScenarioDraft(draft);
+    res.status(201).json(saved);
   } catch (err) {
     next(err);
   }
 });
 
-// POST /api/supervisor/scenarios/:id/approve
-supervisorRoutes.post('/scenarios/:id/approve', async (req: Request, res: Response, next: NextFunction) => {
+// PATCH /api/supervisor/scenarios/:id -> ScenarioDraft
+supervisorRoutes.patch('/scenarios/:id', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const status = req.body.status === 'REJECTED' ? 'REJECTED' : 'APPROVED';
-    const updated = await repository.approveScenario(req.params.id, status);
-    if (!updated) {
-      res.status(404).json({ error: 'SCENARIO_NOT_FOUND', message: 'Scenario does not exist.' });
+    const drafts = await repository.getScenarioDrafts();
+    const existing = drafts.find((d) => d.id === req.params.id);
+    if (!existing) {
+      res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Scenario does not exist.' } });
       return;
     }
-    res.json({ scenario: updated });
+
+    if (req.body.expectedVersion !== undefined && req.body.expectedVersion !== existing.version) {
+      res.status(409).json({ error: { code: 'VERSION_CONFLICT', message: 'Scenario changed. Refresh before saving.' } });
+      return;
+    }
+
+    const updated: ScenarioDraft = {
+      ...existing,
+      ...req.body,
+      status: 'DRAFT', // Editing approved material creates a DRAFT revision and invalidates approval
+      version: existing.version + 1,
+    };
+
+    const saved = await repository.saveScenarioDraft(updated);
+    res.json(saved);
   } catch (err) {
     next(err);
   }
 });
 
-// GET /api/supervisor/sources
-supervisorRoutes.get('/sources', (_req: Request, res: Response) => {
-  res.json({ sources: OFFICIAL_KNOWLEDGE_SOURCES });
+// POST /api/supervisor/scenarios/:id/approve -> ScenarioDraft
+supervisorRoutes.post('/scenarios/:id/approve', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const body = ReviewScenarioZod.parse(req.body);
+    const updated = await repository.approveScenarioDraft(
+      req.params.id,
+      body.expectedVersion,
+      body.decision,
+      body.reviewNote
+    );
+
+    if (!updated) {
+      res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Scenario does not exist.' } });
+      return;
+    }
+
+    res.json(updated);
+  } catch (err: any) {
+    if (err.message?.includes('conflict')) {
+      res.status(409).json({ error: { code: 'VERSION_CONFLICT', message: err.message } });
+      return;
+    }
+    next(err);
+  }
 });

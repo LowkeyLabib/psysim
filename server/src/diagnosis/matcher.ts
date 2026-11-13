@@ -1,8 +1,8 @@
-import { DiagnosticOutcome, ScenarioTemplate } from '../types/index.js';
+import { Outcome, InternalClinicalProfile } from '../types/index.js';
 import { DiagnosisNormalizer } from './normalizer.js';
 
 export interface DiagnosisMatchResult {
-  outcome: DiagnosticOutcome;
+  outcome: Outcome;
   matchedDiagnosisName?: string;
   explanation: string;
 }
@@ -10,7 +10,7 @@ export interface DiagnosisMatchResult {
 export class DiagnosisMatcher {
   static evaluate(
     submittedDiagnosis: string,
-    scenario: ScenarioTemplate
+    scenario: InternalClinicalProfile
   ): DiagnosisMatchResult {
     const rawNormalized = DiagnosisNormalizer.normalize(submittedDiagnosis);
     const approvedNormalized = DiagnosisNormalizer.normalize(scenario.approvedDiagnosis.name);
@@ -22,12 +22,12 @@ export class DiagnosisMatcher {
       };
     }
 
-    // 1. Direct match with approved diagnosis name
+    // 1. Direct match with approved ground truth diagnosis
     if (rawNormalized === approvedNormalized) {
       return {
         outcome: 'CORRECT',
         matchedDiagnosisName: scenario.approvedDiagnosis.name,
-        explanation: `Accurately identified ${scenario.approvedDiagnosis.name}, matching clinical ground truth.`,
+        explanation: `Accurately identified approved ground-truth condition (${scenario.approvedDiagnosis.name}).`,
       };
     }
 
@@ -39,7 +39,7 @@ export class DiagnosisMatcher {
           return {
             outcome: 'CORRECT',
             matchedDiagnosisName: accepted.name,
-            explanation: `Accurately identified approved clinical diagnosis (${accepted.name}).`,
+            explanation: `Accurately identified approved clinical condition (${accepted.name}).`,
           };
         }
         if (accepted.isPartial) {
@@ -59,7 +59,7 @@ export class DiagnosisMatcher {
             return {
               outcome: 'CORRECT',
               matchedDiagnosisName: accepted.name,
-              explanation: `Accepted synonym matches approved diagnosis (${accepted.name}).`,
+              explanation: `Accepted clinical synonym matches approved diagnosis (${accepted.name}).`,
             };
           }
           return {
@@ -72,23 +72,22 @@ export class DiagnosisMatcher {
     }
 
     // 3. Substring / Specifier Partial Matches
-    // e.g. "bipolar" for "bipolar i disorder" or "depression" for "major depressive disorder"
     const categoryNorm = DiagnosisNormalizer.normalize(scenario.categoryName);
     if (
-      rawNormalized.includes('bipolar') && approvedNormalized.includes('bipolar') ||
-      rawNormalized.includes('depress') && approvedNormalized.includes('depress') ||
-      rawNormalized.includes('psychosis') && approvedNormalized.includes('schizophren') ||
-      rawNormalized.includes('anxiety') && approvedNormalized.includes('anxiety') ||
+      (rawNormalized.includes('bipolar') && approvedNormalized.includes('bipolar')) ||
+      (rawNormalized.includes('depress') && approvedNormalized.includes('depress')) ||
+      (rawNormalized.includes('psychosis') && approvedNormalized.includes('schizophren')) ||
+      (rawNormalized.includes('anxiety') && approvedNormalized.includes('anxiety')) ||
       rawNormalized.includes(categoryNorm)
     ) {
       return {
         outcome: 'PARTIALLY_CORRECT',
         matchedDiagnosisName: scenario.categoryName,
-        explanation: `Identified the correct diagnostic category (${scenario.categoryName}), but did not specify the exact clinical disorder or specifier.`,
+        explanation: `Identified the correct diagnostic category (${scenario.categoryName}), but missed required disorder specifiers.`,
       };
     }
 
-    // 4. If submission contains medical reasoning that might be defensible but isn't clear
+    // 4. Complex medical formulations requiring review
     if (rawNormalized.length > 50 && (rawNormalized.includes('disorder') || rawNormalized.includes('syndrome'))) {
       return {
         outcome: 'REVIEW_REQUIRED',
@@ -99,7 +98,7 @@ export class DiagnosisMatcher {
     // 5. Default: Incorrect
     return {
       outcome: 'INCORRECT',
-      explanation: `The submitted diagnosis "${submittedDiagnosis}" does not align with the patient's presentation or approved diagnostic criteria for this case.`,
+      explanation: `The submitted diagnosis "${submittedDiagnosis}" does not align with the patient’s clinical presentation or approved criteria.`,
     };
   }
 }

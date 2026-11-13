@@ -4,33 +4,20 @@ import { repository } from '../db/repository.js';
 
 export const scenarioRoutes = Router();
 
+// GET /api/scenarios/categories -> Category[]
 scenarioRoutes.get('/categories', (_req, res) => {
-  res.json({ categories: SCENARIO_CATEGORIES });
+  res.json(SCENARIO_CATEGORIES);
 });
 
-scenarioRoutes.get('/', async (req, res, next) => {
+// GET /api/scenarios -> public metadata only
+scenarioRoutes.get('/', async (_req, res, next) => {
   try {
-    const { categoryId, difficulty } = req.query;
-    const scenarios = await repository.getScenarios({
-      categoryId: categoryId as string,
-      difficulty: difficulty as any,
-      status: 'APPROVED',
-    });
-
-    // Sanitized: Do NOT leak approved diagnoses or hidden answers
-    const sanitized = scenarios.map((s) => ({
-      id: s.id,
+    const list = await repository.getScenarios({ status: 'APPROVED' });
+    const metadata = list.map((s) => ({
+      available: true,
       categoryId: s.categoryId,
-      categoryName: s.categoryName,
-      difficulty: s.difficulty,
-      patientName: s.patient.name,
-      patientAge: s.patient.age,
-      patientGender: s.patient.gender,
-      patientOccupation: s.patient.occupation,
-      language: s.patient.language,
     }));
-
-    res.json({ scenarios: sanitized });
+    res.json(metadata);
   } catch (err) {
     next(err);
   }

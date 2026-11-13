@@ -1,12 +1,13 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { InMemoryRepository } from '../src/db/repository.js';
-import { ScenarioTemplate } from '../src/types/index.js';
+import { InternalClinicalProfile } from '../src/types/index.js';
+import { CORE_OBJECTIVES } from '../src/knowledge/seedScenarios.js';
 
-const mockScenario: ScenarioTemplate = {
+const mockScenario: InternalClinicalProfile = {
   id: 'scen_test_01',
-  categoryId: 'depressive_disorders',
-  categoryName: 'Depressive Disorders',
-  difficulty: 'BEGINNER',
+  categoryId: 'depressive',
+  categoryName: 'Depressive disorders',
+  difficulty: 'beginner',
   patient: {
     name: 'Rahim',
     age: 27,
@@ -16,7 +17,12 @@ const mockScenario: ScenarioTemplate = {
     language: 'bn',
   },
   presentingComplaint: 'Low mood and fatigue',
-  openingMessage: 'Hello doctor, I have not been feeling well.',
+  openingMessage: {
+    en: 'Hello doctor, I have not been feeling well.',
+    bn: 'ডাক্তার সাহেব...',
+    banglish: 'Doctor shaheb...',
+    mixed: 'Hello doctor...',
+  },
   symptoms: ['Insomnia', 'Fatigue', 'Loss of interest'],
   symptomTimeline: { onset: '2 months ago', duration: 'Persistent', progression: 'Worsening' },
   psychiatricHistory: 'No prior history',
@@ -34,20 +40,7 @@ const mockScenario: ScenarioTemplate = {
   acceptedDiagnoses: [
     { name: 'Major Depressive Disorder', isExact: true, synonyms: ['MDD', 'Depression'] },
   ],
-  mandatoryObjectives: [
-    {
-      id: 'obj_presenting_complaint',
-      title: 'Presenting Complaint',
-      description: 'Elicit chief complaint',
-      isMandatory: true,
-    },
-    {
-      id: 'obj_safety_risk',
-      title: 'Safety & Risk',
-      description: 'Screen for suicidality',
-      isMandatory: true,
-    },
-  ],
+  mandatoryObjectives: CORE_OBJECTIVES,
   reviewStatus: 'APPROVED',
 };
 
@@ -61,14 +54,15 @@ describe('InMemoryRepository', () => {
   it('creates and retrieves a session correctly', async () => {
     const session = await repo.createSession({
       userId: 'usr_001',
-      scenarioId: mockScenario.id,
-      mode: 'CLINICAL_CHALLENGE',
-      difficulty: 'BEGINNER',
-      patient: mockScenario.patient,
+      scenario: mockScenario,
+      mode: 'challenge',
+      difficulty: 'beginner',
+      language: 'en',
+      isLive: false,
     });
 
     expect(session.id).toBeDefined();
-    expect(session.status).toBe('CREATED');
+    expect(session.state).toBe('IN_PROGRESS');
     expect(session.patient.name).toBe('Rahim');
 
     const fetched = await repo.getSession(session.id);
@@ -79,61 +73,62 @@ describe('InMemoryRepository', () => {
   it('updates session status along state machine', async () => {
     const session = await repo.createSession({
       userId: 'usr_001',
-      scenarioId: mockScenario.id,
-      mode: 'CLINICAL_CHALLENGE',
-      difficulty: 'BEGINNER',
-      patient: mockScenario.patient,
+      scenario: mockScenario,
+      mode: 'challenge',
+      difficulty: 'beginner',
+      language: 'en',
+      isLive: false,
     });
 
-    await repo.updateSessionStatus(session.id, 'IN_PROGRESS');
-    let updated = await repo.getSession(session.id);
-    expect(updated?.status).toBe('IN_PROGRESS');
-
-    await repo.updateSessionStatus(session.id, 'INTERVIEW_COMPLETE');
-    updated = await repo.getSession(session.id);
-    expect(updated?.status).toBe('INTERVIEW_COMPLETE');
+    await repo.updateSession(session.id, (s) => {
+      s.state = 'INTERVIEW_COMPLETE';
+    });
+    const updated = await repo.getSession(session.id);
+    expect(updated?.state).toBe('INTERVIEW_COMPLETE');
   });
 
   it('persists dialogue messages', async () => {
     const session = await repo.createSession({
       userId: 'usr_001',
-      scenarioId: mockScenario.id,
-      mode: 'CLINICAL_CHALLENGE',
-      difficulty: 'BEGINNER',
-      patient: mockScenario.patient,
+      scenario: mockScenario,
+      mode: 'challenge',
+      difficulty: 'beginner',
+      language: 'en',
+      isLive: false,
     });
 
-    const m1 = await repo.addMessage(session.id, 'patient', 'Hello');
-    const m2 = await repo.addMessage(session.id, 'student', 'Hi, how can I help you?');
+    await repo.updateSession(session.id, (s) => {
+      s.messages.push({
+        id: 'msg_test',
+        role: 'student',
+        content: 'How can I help you?',
+        createdAt: new Date().toISOString(),
+      });
+    });
 
-    const messages = await repo.getMessages(session.id);
-    expect(messages).toHaveLength(2);
-    expect(messages[0].content).toBe('Hello');
-    expect(messages[1].content).toBe('Hi, how can I help you?');
+    const fetched = await repo.getSession(session.id);
+    expect(fetched?.messages).toHaveLength(2);
+    expect(fetched?.messages[1].content).toBe('How can I help you?');
   });
 
   it('initializes and updates mandatory interview objectives', async () => {
     const session = await repo.createSession({
       userId: 'usr_001',
-      scenarioId: mockScenario.id,
-      mode: 'CLINICAL_CHALLENGE',
-      difficulty: 'BEGINNER',
-      patient: mockScenario.patient,
+      scenario: mockScenario,
+      mode: 'challenge',
+      difficulty: 'beginner',
+      language: 'en',
+      isLive: false,
     });
 
-    const objs = await repo.initObjectives(session.id, mockScenario);
-    expect(objs).toHaveLength(2);
-    expect(objs[0].status).toBe('NOT_STARTED');
+    expect(session.progress.objectives.length).toBeGreaterThan(0);
+    expect(session.progress.objectives[0].completed).toBe(false);
 
-    await repo.updateObjective(session.id, 'obj_presenting_complaint', {
-      status: 'COMPLETED',
-      evidenceQuote: 'Feeling low and tired',
-      confidence: 0.95,
+    await repo.updateSession(session.id, (s) => {
+      s.progress.objectives[0].completed = true;
     });
 
-    const updatedObjs = await repo.getObjectives(session.id);
-    const compObj = updatedObjs.find((o) => o.id === 'obj_presenting_complaint');
-    expect(compObj?.status).toBe('COMPLETED');
-    expect(compObj?.confidence).toBe(0.95);
+    const updated = await repo.getSession(session.id);
+    expect(updated?.progress.objectives[0].completed).toBe(true);
   });
 });

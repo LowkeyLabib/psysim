@@ -1,13 +1,107 @@
-import { ScenarioTemplate } from '../types/index.js';
-import { CORE_INTERVIEW_OBJECTIVES } from '../interview/objectives.js';
+import { InternalClinicalProfile, Category } from '../types/index.js';
 
-export const SEED_SCENARIOS: ScenarioTemplate[] = [
+export const SCENARIO_CATEGORIES: Category[] = [
+  {
+    id: 'depressive',
+    name: 'Depressive disorders',
+    description: 'Explore mood, motivation, and everyday functioning.',
+  },
+  {
+    id: 'bipolar',
+    name: 'Bipolar & related disorders',
+    description: 'Understand changes in mood, energy, and activity.',
+  },
+  {
+    id: 'psychotic',
+    name: 'Schizophrenia spectrum & psychotic disorders',
+    description: 'Explore experiences, perception, and thought.',
+  },
+  {
+    id: 'anxiety',
+    name: 'Anxiety disorders',
+    description: 'Explore worry, fear, and avoidance.',
+  },
+  {
+    id: 'ocd',
+    name: 'Obsessive-compulsive & related disorders',
+    description: 'Explore intrusive thoughts and repetitive behaviors.',
+  },
+  {
+    id: 'trauma',
+    name: 'Trauma & stressor-related disorders',
+    description: 'Understand experiences in their personal context.',
+  },
+  {
+    id: 'substance',
+    name: 'Substance-related disorders',
+    description: 'Explore patterns of use and their impact.',
+  },
+];
+
+export const CORE_OBJECTIVES = [
+  {
+    id: 'o0',
+    title: 'Presenting complaint',
+    guidance: 'Begin with an open invitation to talk.',
+    required: true,
+    criteria: 'Elicits chief complaint in patient’s own words.',
+    keywordsEn: ['problem', 'help', 'bring', 'brings you in', 'how can I help', 'complaint', 'feeling unwell', 'what happened'],
+    keywordsBn: ['সমস্যা', 'কি সমস্যা', 'কষ্ট', 'কেমন আছেন', 'কি অসুবিধা', 'somossa', 'kosto', 'kemon achen', 'ki hoyeche'],
+  },
+  {
+    id: 'o1',
+    title: 'Onset, course & severity',
+    guidance: 'Clarify timing, change over time, and intensity.',
+    required: true,
+    criteria: 'Explores duration, chronological onset, and severity progression.',
+    keywordsEn: ['how long', 'when did it start', 'duration', 'worse', 'started', 'months', 'weeks', 'days', 'progress', 'timeline', 'onset'],
+    keywordsBn: ['কতদিন', 'কবে থেকে', 'শুরু', 'কবে শুরু', 'মাস ধরে', 'বাড়ছে', 'দিন দিন', 'koto din', 'koto din dhore', 'kobe theke', 'shuru', 'barche'],
+  },
+  {
+    id: 'o2',
+    title: 'Everyday functioning',
+    guidance: 'Explore the impact on work, relationships, and self-care.',
+    required: true,
+    criteria: 'Investigates occupational, academic, social, or daily impairment.',
+    keywordsEn: ['work', 'job', 'office', 'study', 'university', 'concentrat', 'focus', 'daily life', 'family', 'routine'],
+    keywordsBn: ['কাজ', 'চাকরি', 'অফিস', 'পড়াশোনা', 'মনোযোগ', 'সংসার', 'পরিবার', 'kaj', 'chakri', 'porashona', 'monojog', 'poribar'],
+  },
+  {
+    id: 'o3',
+    title: 'Relevant history',
+    guidance: 'Ask about psychiatric and medical history, medication, and substance use.',
+    required: true,
+    criteria: 'Screens past psychiatric episodes, physical health, meds, and substances.',
+    keywordsEn: ['past history', 'before', 'previous', 'medication', 'medicine', 'illness', 'drugs', 'alcohol', 'smoking', 'substance', 'hospital'],
+    keywordsBn: ['আগে কখনো', 'আগের ইতিহাস', 'ঔষধ', 'ওষুধ', 'অসুখ', 'নেশা', 'মদ', 'সিগারেট', 'age kokhono', 'ager itihas', 'oshoodh', 'nesha', 'mod'],
+  },
+  {
+    id: 'o4',
+    title: 'Risk & protective factors',
+    guidance: 'Explore safety sensitively and identify available support.',
+    required: true,
+    criteria: 'Assesses suicidal ideation, self-harm impulses, and protective support.',
+    keywordsEn: ['suicid', 'end your life', 'harm yourself', 'want to die', 'death', 'hopeless', 'giving up', 'kill yourself', 'safety'],
+    keywordsBn: ['আত্মহত্যা', 'মরার চিন্তা', 'মরে যেতে', 'বেঁচে থাকার', 'ক্ষতি করা', 'জীবন শেষ', 'morar chinta', 'more jete', 'beche thakar', 'khoti kora'],
+  },
+  {
+    id: 'o5',
+    title: 'Distinguishing features',
+    guidance: 'Clarify the presentation and consider relevant alternatives.',
+    required: false,
+    criteria: 'Evaluates differential criteria, manic episodes, or psychotic features.',
+    keywordsEn: ['high energy', 'mania', 'voices', 'hallucination', 'paranoia', 'panic', 'anxiety', 'obsess', 'compuls', 'flashback'],
+    keywordsBn: ['বেশি শক্তি', 'অস্বাভাবিক আনন্দ', 'আওয়াজ শোনা', 'ভ্রম', 'আতঙ্ক', 'অতিরিক্ত দুশ্চিন্তা', 'awaj shona', 'bhrom', 'atongko'],
+  },
+];
+
+export const SEED_SCENARIOS: InternalClinicalProfile[] = [
   // 1. Depressive Disorders (Beginner)
   {
     id: 'scen_mdd_beginner',
-    categoryId: 'depressive_disorders',
-    categoryName: 'Depressive Disorders',
-    difficulty: 'BEGINNER',
+    categoryId: 'depressive',
+    categoryName: 'Depressive disorders',
+    difficulty: 'beginner',
     patient: {
       name: 'Rahim Ahmed',
       age: 27,
@@ -17,20 +111,25 @@ export const SEED_SCENARIOS: ScenarioTemplate[] = [
       language: 'bn',
     },
     presentingComplaint: 'কয়েক সপ্তাহ ধরে শরীরে কোনো শক্তি পাই না, মন খুব খারাপ থাকে, কিছু ভালো লাগে না।',
-    openingMessage: 'আসসালামু আলাইকুম ডাক্তার সাহেব। আসলে গত দুই মাস ধরে শরীর আর মন কোনোটিই ভালো লাগছে না... কাজে একদম মন বসাতে পারছি না।',
+    openingMessage: {
+      en: 'Hello doctor. I haven’t been feeling like myself for the past two months. I have no energy and can barely concentrate at work.',
+      bn: 'আসসালামু আলাইকুম ডাক্তার সাহেব। আসলে গত দুই মাস ধরে শরীর আর মন কোনোটিই ভালো লাগছে না... কাজে একদম মন বসাতে পারছি না।',
+      banglish: 'Assalamu alaikum doctor shaheb. Asheley gotho dui mash dhore shorir aar mon bhalo lagche na... kaje mon boshe na.',
+      mixed: 'ডাক্তার সাহেব, গত দুই মাস ধরে শরীরটা ভালো লাগছে না... I have no energy and feel completely exhausted.',
+    },
     symptoms: [
       'Pervasive depressed mood most of the day for 2 months',
       'Loss of interest and pleasure in hobbies (anhedonia)',
-      'Early morning awakening with inability to fall back asleep',
+      'Early morning awakening at 3:30 AM with inability to fall back asleep',
       'Significant low energy and mental exhaustion',
       'Feelings of worthlessness and guilt regarding work performance',
       'Reduced appetite with mild unintended weight loss',
     ],
     symptomTimeline: {
-      onset: '2 months ago',
-      duration: '8 weeks continuously',
+      onset: '2 months ago following high-stress fiscal audits',
+      duration: '8 weeks continuous',
       progression: 'Progressively worsening, especially in morning hours',
-      fluctuation: 'Symptoms worse in the morning, slight relief by evening',
+      fluctuation: 'Symptoms worse upon waking in morning, slight relief by evening',
     },
     psychiatricHistory: 'No prior formal psychiatric diagnosis or treatment.',
     medicalHistory: 'No chronic physical illness. Non-diabetic, normotensive.',
@@ -39,9 +138,9 @@ export const SEED_SCENARIOS: ScenarioTemplate[] = [
     riskFactors: ['Recent job promotion with increased workload and solitary living'],
     protectiveFactors: ['Close emotional bond with elder sister and mother', 'Religious faith'],
     negativeFindings: [
-      'No past or present elevated, irritable, or expansive mood',
-      'No decreased need for sleep with high energy (rules out Bipolar)',
-      'No delusions, hallucinations, or thought disorder',
+      'No past or present elevated, irritable, or expansive mood (rules out Bipolar)',
+      'No decreased need for sleep with high energy',
+      'No delusions, hallucinations, or formal thought disorder',
       'No history of traumatic events or intrusive memories',
     ],
     approvedDiagnosis: {
@@ -77,16 +176,16 @@ export const SEED_SCENARIOS: ScenarioTemplate[] = [
         synonyms: ['Mood disorder', 'Depressive disorder'],
       },
     ],
-    mandatoryObjectives: CORE_INTERVIEW_OBJECTIVES.slice(0, 5),
+    mandatoryObjectives: CORE_OBJECTIVES,
     reviewStatus: 'APPROVED',
   },
 
-  // 2. Bipolar and Related Disorders (Intermediate)
+  // 2. Bipolar & Related Disorders (Intermediate)
   {
     id: 'scen_bipolar_intermediate',
-    categoryId: 'bipolar_disorders',
-    categoryName: 'Bipolar and Related Disorders',
-    difficulty: 'INTERMEDIATE',
+    categoryId: 'bipolar',
+    categoryName: 'Bipolar & related disorders',
+    difficulty: 'intermediate',
     patient: {
       name: 'Farhana Yasmin',
       age: 31,
@@ -96,12 +195,17 @@ export const SEED_SCENARIOS: ScenarioTemplate[] = [
       language: 'bn',
     },
     presentingComplaint: 'পরিবারের লোকেরা জোর করে এনেছে, অথচ আমি জীবনে এর আগে কখনো এত চনমনে আর সেরা অনুভব করিনি!',
-    openingMessage: 'ডাক্তার সাহেব, আমার তো কোনো সমস্যা নেই! আমার মাথা এখন কম্পিউটারের চেয়েও দ্রুত চলছে, আমি নতুন পাঁচটা আন্তর্জাতিক স্টার্টআপ শুরু করতে যাচ্ছি!',
+    openingMessage: {
+      en: 'Doctor, my family forced me to come here, but honestly I have never felt more inspired in my life! My mind is running at lightning speed!',
+      bn: 'ডাক্তার সাহেব, আমার তো কোনো সমস্যা নেই! আমার মাথা এখন কম্পিউটারের চেয়েও দ্রুত চলছে, আমি নতুন পাঁচটা আন্তর্জাতিক স্টার্টআপ শুরু করতে যাচ্ছি!',
+      banglish: 'Doctor shaheb, amar kono somossa nai! Amar matha computer er cheyeo fast cholche, 5 ta startup shuru korbo!',
+      mixed: 'ডাক্তার সাহেব, family forced me to come here, but I have never felt more energized!',
+    },
     symptoms: [
       'Grandiosity and expansive self-esteem',
       'Decreased need for sleep (sleeping 2 hours nightly yet feeling refreshed)',
       'Rapid, pressured speech and racing thoughts',
-      'Impulsive, uninhibited financial expenditures on unnecessary tech gear',
+      'Impulsive financial expenditures on tech gear and domain registrations',
       'High distractibility and psychomotor agitation',
     ],
     symptomTimeline: {
@@ -149,16 +253,16 @@ export const SEED_SCENARIOS: ScenarioTemplate[] = [
         synonyms: ['BPAD', 'Bipolar Disorder', 'বাইপোলার ডিসঅর্ডার'],
       },
     ],
-    mandatoryObjectives: CORE_INTERVIEW_OBJECTIVES.slice(0, 5),
+    mandatoryObjectives: CORE_OBJECTIVES,
     reviewStatus: 'APPROVED',
   },
 
-  // 3. Schizophrenia Spectrum and Other Psychotic Disorders (Advanced)
+  // 3. Schizophrenia Spectrum & Psychotic Disorders (Advanced)
   {
     id: 'scen_schizo_advanced',
-    categoryId: 'psychotic_disorders',
-    categoryName: 'Schizophrenia Spectrum and Other Psychotic Disorders',
-    difficulty: 'ADVANCED',
+    categoryId: 'psychotic',
+    categoryName: 'Schizophrenia spectrum & psychotic disorders',
+    difficulty: 'advanced',
     patient: {
       name: 'Tanvir Hossain',
       age: 24,
@@ -168,7 +272,12 @@ export const SEED_SCENARIOS: ScenarioTemplate[] = [
       language: 'bn',
     },
     presentingComplaint: 'লোকজন আমার ডিভাইসে নজর রাখছে, দেয়ালে মাইক্রোফোন বসিয়ে আমার চিন্তা রেকর্ড করছে।',
-    openingMessage: 'ডাক্তার সাহেব, আপনি কি একা এসেছেন নাকি পাশের রুমে কেউ আমার রেকর্ড শুনছে? আমার ঘরে গোপন ট্রান্সমিটার লাগানো হয়েছে...',
+    openingMessage: {
+      en: 'Doctor, are you alone or is someone recording this interview behind the wall? There are signals being broadcasted into my room.',
+      bn: 'ডাক্তার সাহেব, আপনি কি একা এসেছেন নাকি পাশের রুমে কেউ আমার রেকর্ড শুনছে? আমার ঘরে গোপন ট্রান্সমিটার লাগানো হয়েছে...',
+      banglish: 'Doctor shaheb, apni ki eka eshechen naki pash er room theke keu record korche? Amar room e transmitter lagano...',
+      mixed: 'ডাক্তার সাহেব, are you sure this room is not bugged? They have placed hidden transmitters in my devices.',
+    },
     symptoms: [
       'Persecutory and somatic delusions of external surveillance lasting >7 months',
       'Third-person auditory hallucinations (voices commenting on his actions)',
@@ -188,7 +297,7 @@ export const SEED_SCENARIOS: ScenarioTemplate[] = [
     riskFactors: ['Family history of psychotic illness in maternal uncle'],
     protectiveFactors: ['Parents actively involved in caretaking'],
     negativeFindings: [
-      'No primary mood episodes (depression or mania) during active psychotic symptoms',
+      'No primary mood episodes during active psychotic symptoms',
       'No history of seizures, substance toxicity, or neurological illness',
       'MRI brain unremarkable',
     ],
@@ -210,16 +319,16 @@ export const SEED_SCENARIOS: ScenarioTemplate[] = [
         synonyms: ['Primary Psychosis', 'Psychosis'],
       },
     ],
-    mandatoryObjectives: CORE_INTERVIEW_OBJECTIVES.slice(0, 5),
+    mandatoryObjectives: CORE_OBJECTIVES,
     reviewStatus: 'APPROVED',
   },
 
   // 4. Anxiety Disorders (Beginner)
   {
     id: 'scen_gad_beginner',
-    categoryId: 'anxiety_disorders',
-    categoryName: 'Anxiety Disorders',
-    difficulty: 'BEGINNER',
+    categoryId: 'anxiety',
+    categoryName: 'Anxiety disorders',
+    difficulty: 'beginner',
     patient: {
       name: 'Nusrat Jahan',
       age: 29,
@@ -229,7 +338,12 @@ export const SEED_SCENARIOS: ScenarioTemplate[] = [
       language: 'bn',
     },
     presentingComplaint: 'সবসময় মনে হয় কোনো খারাপ বিপদ ঘটবে, বুক ধড়ফড় করে এবং কোনোভাবেই দুশ্চিন্তা থামাতে পারি না।',
-    openingMessage: 'আসসালামু আলাইকুম ডাক্তার সাহেব। আসলে কোনো নির্দিষ্ট কারণ ছাড়াই সব বিষয় নিয়ে অতিরিক্ত চিন্তা হয়, শরীর সবসময় টানটান হয়ে থাকে...',
+    openingMessage: {
+      en: 'Hello doctor. I can’t stop worrying about everyday things. My muscles are constantly tense and my heart pounds without reason.',
+      bn: 'আসসালামু আলাইকুম ডাক্তার সাহেব। আসলে কোনো নির্দিষ্ট কারণ ছাড়াই সব বিষয় নিয়ে অতিরিক্ত চিন্তা হয়, শরীর সবসময় টানটান হয়ে থাকে...',
+      banglish: 'Assalamu alaikum doctor shaheb. Kono karon charai shob niye eto duschinta hoy, shorir shob shomoy tension e thake...',
+      mixed: 'আসসালামু আলাইকুম ডাক্তার সাহেব। I feel constantly on edge and cannot stop worrying about everything.',
+    },
     symptoms: [
       'Excessive, uncontrollable worry regarding everyday matters for over 7 months',
       'Persistent muscle tension, shoulder stiffness, and motor restlessness',
@@ -277,16 +391,16 @@ export const SEED_SCENARIOS: ScenarioTemplate[] = [
         synonyms: ['Anxiety Neurosis'],
       },
     ],
-    mandatoryObjectives: CORE_INTERVIEW_OBJECTIVES.slice(0, 5),
+    mandatoryObjectives: CORE_OBJECTIVES,
     reviewStatus: 'APPROVED',
   },
 
-  // 5. Obsessive-Compulsive and Related Disorders (Intermediate)
+  // 5. Obsessive-Compulsive & Related Disorders (Intermediate)
   {
     id: 'scen_ocd_intermediate',
-    categoryId: 'obsessive_compulsive',
-    categoryName: 'Obsessive-Compulsive and Related Disorders',
-    difficulty: 'INTERMEDIATE',
+    categoryId: 'ocd',
+    categoryName: 'Obsessive-compulsive & related disorders',
+    difficulty: 'intermediate',
     patient: {
       name: 'Kamal Uddin',
       age: 34,
@@ -296,7 +410,12 @@ export const SEED_SCENARIOS: ScenarioTemplate[] = [
       language: 'bn',
     },
     presentingComplaint: 'হাত নোংরা হয়ে জীবাণু লেগেছে এই চিন্তা মাথা থেকে যায় না, দিনে ৫০ বার সাবান দিয়ে হাত ধুতে হয়।',
-    openingMessage: 'ডাক্তার সাহেব, আমি জানি আমার এই চিন্তাগুলো অযৌক্তিক, কিন্তু আমি কোনোভাবেই হাত ধোয়া থামাতে পারছি না...',
+    openingMessage: {
+      en: 'Doctor, I know my thoughts don’t make logical sense, but if I don’t wash my hands repeatedly, the dread of contamination is unbearable.',
+      bn: 'ডাক্তার সাহেব, আমি জানি আমার এই চিন্তাগুলো অযৌক্তিক, কিন্তু আমি কোনোভাবেই হাত ধোয়া থামাতে পারছি না...',
+      banglish: 'Doctor shaheb, ami jani ei chinta gulo oshabhabik, kintu ami hat dhowa thamate parchi na...',
+      mixed: 'ডাক্তার সাহেব, I know these thoughts are irrational, but the fear of contamination consumes my day.',
+    },
     symptoms: [
       'Intrusive, ego-dystonic recurrent thoughts of bacterial contamination',
       'Compulsive hand-washing rituals lasting >3 hours daily',
@@ -328,13 +447,7 @@ export const SEED_SCENARIOS: ScenarioTemplate[] = [
       {
         name: 'Obsessive-Compulsive Disorder',
         isExact: true,
-        synonyms: [
-          'OCD',
-          'Obsessive Compulsive Disorder',
-          'শুচিবায়ু',
-          'ওসিডি',
-          'শুচিবায়ুগ্রস্ততা',
-        ],
+        synonyms: ['OCD', 'Obsessive Compulsive Disorder', 'শুচিবায়ু', 'ওসিডি', 'শুচিবায়ুগ্রস্ততা'],
       },
       {
         name: 'Obsessive Disorder',
@@ -343,16 +456,16 @@ export const SEED_SCENARIOS: ScenarioTemplate[] = [
         synonyms: ['Compulsive Disorder'],
       },
     ],
-    mandatoryObjectives: CORE_INTERVIEW_OBJECTIVES.slice(0, 5),
+    mandatoryObjectives: CORE_OBJECTIVES,
     reviewStatus: 'APPROVED',
   },
 
-  // 6. Trauma- and Stressor-Related Disorders (Intermediate)
+  // 6. Trauma & Stressor-Related Disorders (Intermediate)
   {
     id: 'scen_ptsd_intermediate',
-    categoryId: 'trauma_stressor',
-    categoryName: 'Trauma- and Stressor-Related Disorders',
-    difficulty: 'INTERMEDIATE',
+    categoryId: 'trauma',
+    categoryName: 'Trauma & stressor-related disorders',
+    difficulty: 'intermediate',
     patient: {
       name: 'Ayesha Siddiqua',
       age: 38,
@@ -362,7 +475,12 @@ export const SEED_SCENARIOS: ScenarioTemplate[] = [
       language: 'bn',
     },
     presentingComplaint: 'কারখানায় আগুন লাগার ঘটনার পর থেকে রাতে দুঃস্বপ্ন দেখি, আগুনের ধোঁয়া মনে করে ভয়ে জমে যাই।',
-    openingMessage: 'ডাক্তার সাহেব, ৬ মাস আগে কারখানার সেই আগুনের ঘটনার পর থেকে আমি আর স্বাভাবিক হতে পারছি না...',
+    openingMessage: {
+      en: 'Doctor, since the factory fire six months ago, I cannot sleep without nightmares. Whenever I smell smoke, I freeze in terror.',
+      bn: 'ডাক্তার সাহেব, ৬ মাস আগে কারখানার সেই আগুনের ঘটনার পর থেকে আমি আর স্বাভাবিক হতে পারছি না...',
+      banglish: 'Doctor shaheb, 6 mash age karkhanay agun lagar ghotona por theke ami aar shabhabik hote parchi na...',
+      mixed: 'ডাক্তার সাহেব, ever since the factory fire, I wake up in cold sweats having terrifying flashbacks.',
+    },
     symptoms: [
       'Intrusive traumatic recollections and night terrors of factory fire',
       'Distressing dissociative flashbacks triggered by sirens and smoke smells',
@@ -403,16 +521,16 @@ export const SEED_SCENARIOS: ScenarioTemplate[] = [
         synonyms: ['Stressor-Related Disorder'],
       },
     ],
-    mandatoryObjectives: CORE_INTERVIEW_OBJECTIVES.slice(0, 5),
+    mandatoryObjectives: CORE_OBJECTIVES,
     reviewStatus: 'APPROVED',
   },
 
-  // 7. Substance-Related and Addictive Disorders (Advanced)
+  // 7. Substance-Related Disorders (Advanced)
   {
     id: 'scen_aud_advanced',
-    categoryId: 'substance_related',
-    categoryName: 'Substance-Related and Addictive Disorders',
-    difficulty: 'ADVANCED',
+    categoryId: 'substance',
+    categoryName: 'Substance-related disorders',
+    difficulty: 'advanced',
     patient: {
       name: 'Shafiqul Islam',
       age: 45,
@@ -422,7 +540,12 @@ export const SEED_SCENARIOS: ScenarioTemplate[] = [
       language: 'bn',
     },
     presentingComplaint: 'হাত কাঁপে বলে সকালে একটু মদ না খেলে গাড়ির চাবিও ধরতে পারি না, ডাক্তাররা লিভারের সমস্যা বলেছে।',
-    openingMessage: 'ডাক্তার সাহেব, আমি তো মদ কোনো শখে খাই না। শরীর কাঁপাকাঁপি বন্ধ করতে বাধ্য হয়ে একটু খাই...',
+    openingMessage: {
+      en: 'Doctor, I don’t drink for pleasure. My hands shake uncontrollably every morning unless I take a drink just to function.',
+      bn: 'ডাক্তার সাহেব, আমি তো মদ কোনো শখে খাই না। শরীর কাঁপাকাঁপি বন্ধ করতে বাধ্য হয়ে একটু খাই...',
+      banglish: 'Doctor shaheb, ami mod kono shokhe khai na. Hat kapa bondho korte shokale ektu khete hoy...',
+      mixed: 'ডাক্তার সাহেব, I don’t drink for fun. My tremors are so severe every morning that I can’t hold the car keys.',
+    },
     symptoms: [
       'Loss of control over alcohol intake with unsuccessful attempts to cut down',
       'Physical dependence: morning coarse hand tremors, diaphoresis relieved by drinking',
@@ -454,14 +577,7 @@ export const SEED_SCENARIOS: ScenarioTemplate[] = [
       {
         name: 'Alcohol Use Disorder',
         isExact: true,
-        synonyms: [
-          'AUD',
-          'Alcohol Dependence',
-          'Alcoholism',
-          'অ্যালকোহল আসক্তি',
-          'অ্যালকোহল ডিপেন্ডেন্স',
-          'মদে আসক্তি',
-        ],
+        synonyms: ['AUD', 'Alcohol Dependence', 'Alcoholism', 'অ্যালকোহল আসক্তি', 'অ্যালকোহল ডিপেন্ডেন্স', 'মদে আসক্তি'],
       },
       {
         name: 'Substance Use Disorder',
@@ -470,17 +586,7 @@ export const SEED_SCENARIOS: ScenarioTemplate[] = [
         synonyms: ['Substance Addiction', 'SUD'],
       },
     ],
-    mandatoryObjectives: CORE_INTERVIEW_OBJECTIVES.slice(0, 5),
+    mandatoryObjectives: CORE_OBJECTIVES,
     reviewStatus: 'APPROVED',
   },
-];
-
-export const SCENARIO_CATEGORIES = [
-  { id: 'depressive_disorders', name: 'Depressive Disorders', code: 'DSM5_DEP', caseCount: 1 },
-  { id: 'bipolar_disorders', name: 'Bipolar and Related Disorders', code: 'DSM5_BIP', caseCount: 1 },
-  { id: 'psychotic_disorders', name: 'Schizophrenia Spectrum and Other Psychotic Disorders', code: 'DSM5_PSY', caseCount: 1 },
-  { id: 'anxiety_disorders', name: 'Anxiety Disorders', code: 'DSM5_ANX', caseCount: 1 },
-  { id: 'obsessive_compulsive', name: 'Obsessive-Compulsive and Related Disorders', code: 'DSM5_OCD', caseCount: 1 },
-  { id: 'trauma_stressor', name: 'Trauma- and Stressor-Related Disorders', code: 'DSM5_PTSD', caseCount: 1 },
-  { id: 'substance_related', name: 'Substance-Related and Addictive Disorders', code: 'DSM5_SUD', caseCount: 1 },
 ];
