@@ -1,7 +1,14 @@
 import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
+
 export default defineConfig({
+  base: './',
   plugins: [react(), tailwindcss()],
-  test: { pool: 'threads', environment: 'jsdom', setupFiles: './src/test/setup.ts', restoreMocks: true },
+  test: {
+    pool: 'threads',
+    environment: 'jsdom',
+    setupFiles: './src/test/setup.ts',
+    restoreMocks: true,
+  },
 });

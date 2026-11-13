@@ -10,6 +10,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@google/generative-ai": "^0.24.1",
     "@supabase/supabase-js": "2.119.0",
     "lucide-react": "1.72.0",
     "motion": "14.14.0",
