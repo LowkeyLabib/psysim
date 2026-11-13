@@ -1,0 +1,12 @@
+{
+  "name": "psysim-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "description": "PsySim — Psychiatric Patient Simulation Platform",
+  "scripts": {
+    "server": "npm run dev --prefix server",
+    "client": "npm run dev --prefix client",
+    "build": "npm run build --prefix server && npm run build --prefix client",
+    "test": "npm run test --prefix server"
+  }
+}
