@@ -6,7 +6,7 @@ export default defineConfig({
   base: './',
   plugins: [react(), tailwindcss()],
   test: {
-    pool: 'forks',
+    include: ['src/test/**/*.{test,spec}.{ts,tsx}'],
     environment: 'jsdom',
     setupFiles: './src/test/setup.ts',
     restoreMocks: true,
