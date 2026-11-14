@@ -1,10 +1,15 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
-import type { UserProfile } from '../../shared/contracts';
-import { api } from './api';
-import { demoMode, setupMissing } from './config';
-import { supabase } from './supabase';
-import { errorMessage } from './session';
-import { getGeminiApiKey } from './geminiKey';
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+  type ReactNode,
+} from "react";
+import type { UserProfile } from "../../shared/contracts";
+import { api, ApiError, localSignIn, localSignOut } from "./api";
+import { demoMode, setupMissing, localDevelopment } from "./config";
+import { supabase } from "./supabase";
+import { errorMessage } from "./session";
 
 interface AuthValue {
   user: UserProfile | null;
@@ -12,7 +17,7 @@ interface AuthValue {
   error: string;
   refresh: () => void;
   signOut: () => Promise<void>;
-  enterStandalone: () => void;
+  enterLocal: () => Promise<void>;
 }
 
 const Context = createContext<AuthValue | null>(null);
@@ -20,7 +25,7 @@ const Context = createContext<AuthValue | null>(null);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const [error, setError] = useState("");
   const [revision, setRevision] = useState(0);
 
   useEffect(() => {
@@ -29,7 +34,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     async function load() {
       const current = ++generation;
       setLoading(true);
-      setError('');
+      setError("");
       try {
         if (demoMode) {
           const profile = await api.me();
@@ -39,19 +44,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           if (authError) throw authError;
           const profile = data.session ? await api.me() : null;
           if (active && current === generation) setUser(profile);
-        } else {
-          // In standalone mode (e.g. GitHub Pages or client-only without Supabase credentials)
-          const isStandaloneHost = typeof window !== 'undefined' && window.location.hostname.includes('github.io');
-          const hasKey = Boolean(getGeminiApiKey());
-          const hasChosenStandalone = typeof window !== 'undefined' && localStorage.getItem('psysim_standalone_active') === 'true';
-
-          if (isStandaloneHost || hasKey || hasChosenStandalone) {
+        } else if (localDevelopment) {
+          try {
             const profile = await api.me();
             if (active && current === generation) setUser(profile);
-          } else {
+          } catch (e) {
+            if (!(e instanceof ApiError && e.status === 401)) throw e;
             if (active && current === generation) setUser(null);
           }
-        }
+        } else if (active && current === generation) setUser(null);
       } catch (e) {
         if (active && current === generation) {
           setUser(null);
@@ -73,10 +74,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, [revision]);
 
-  const enterStandalone = () => {
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('psysim_standalone_active', 'true');
-    }
+  const enterLocal = async () => {
+    await localSignIn();
     setRevision((v) => v + 1);
   };
 
@@ -85,9 +84,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const { error } = await supabase.auth.signOut();
       if (error) throw error;
     }
-    if (typeof window !== 'undefined') {
-      localStorage.removeItem('psysim_standalone_active');
-    }
+    if (localDevelopment) await localSignOut();
     setUser(null);
   };
 
@@ -99,7 +96,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         error,
         refresh: () => setRevision((v) => v + 1),
         signOut,
-        enterStandalone,
+        enterLocal,
       }}
     >
       {children}
@@ -109,6 +106,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
 export function useAuth() {
   const value = useContext(Context);
-  if (!value) throw new Error('AuthProvider is missing');
+  if (!value) throw new Error("AuthProvider is missing");
   return value;
 }

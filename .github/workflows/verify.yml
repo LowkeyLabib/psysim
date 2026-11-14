@@ -1,0 +1,25 @@
+name: Verify PsySim
+on:
+  push:
+    branches: [dev-frontend, dev-backend]
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            server/package-lock.json
+      - run: npm ci
+      - run: npm ci --prefix server
+      - run: npm test
+      - run: npm test --prefix server
+      - run: npm run build
+      - run: npm run build --prefix server

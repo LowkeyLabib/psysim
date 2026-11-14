@@ -1,19 +1,12 @@
-import { createClient, SupabaseClient } from '@supabase/supabase-js';
-import { config } from '../config/index.js';
-
-let supabaseClient: SupabaseClient | null = null;
-
-export function getSupabase(): SupabaseClient | null {
-  if (!config.supabase.isConfigured) {
-    return null;
-  }
-
-  if (!supabaseClient) {
-    supabaseClient = createClient(
-      config.supabase.url,
-      config.supabase.serviceRoleKey || config.supabase.anonKey
-    );
-  }
-
-  return supabaseClient;
+import { createClient } from "@supabase/supabase-js";
+import { config } from "../config";
+export function getSupabase() {
+  if (!config.supabase.isConfigured) return null;
+  return createClient(config.supabase.url, config.supabase.anonKey, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+      detectSessionInUrl: false,
+    },
+  });
 }

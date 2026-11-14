@@ -12,3 +12,7 @@ playwright-report/
 .npm-cache/
 *.tsbuildinfo
 .superpowers/
+
+server/data/
+*.sqlite*
+server/.env

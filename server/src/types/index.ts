@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from "zod";
 import type {
   Mode,
   Difficulty,
@@ -22,7 +22,7 @@ import type {
   RubricDefinition,
   ScenarioInput,
   ScenarioDraft,
-} from './contracts.js';
+} from "./contracts.js";
 
 export type {
   Mode,
@@ -58,7 +58,7 @@ export interface InternalClinicalProfile {
   patient: {
     name: string;
     age: number;
-    gender: 'male' | 'female' | 'other';
+    gender: "male" | "female" | "other";
     occupation: string;
     personality: string;
     language: Language;
@@ -100,30 +100,50 @@ export interface InternalClinicalProfile {
     keywordsEn?: string[];
     keywordsBn?: string[];
   }[];
-  reviewStatus: 'DRAFT' | 'PENDING_REVIEW' | 'APPROVED' | 'REJECTED';
+  demonstration?: boolean;
+  rubric?: RubricDefinition[];
+  sourceReferences?: string[];
+  reviewStatus: "DRAFT" | "PENDING_REVIEW" | "APPROVED" | "REJECTED";
 }
 
 // Zod Validation Schemas matching Labib's contract
-export const CreateSessionZod = z.object({
-  mode: z.enum(['challenge', 'custom']),
-  difficulty: z.enum(['beginner', 'intermediate', 'advanced']),
-  language: z.enum(['en', 'bn', 'banglish', 'mixed']).default('en'),
-  categoryId: z.string().optional().nullable(),
-});
+export const CreateSessionZod = z
+  .object({
+    mode: z.enum(["challenge", "custom"]),
+    difficulty: z.enum(["beginner", "intermediate", "advanced"]),
+    language: z.enum(["en", "bn", "banglish", "mixed"]).default("en"),
+    categoryId: z.string().trim().min(1).optional(),
+  })
+  .refine(
+    (v) => v.mode !== "custom" || !!v.categoryId,
+    "Custom cases require a category",
+  );
 
 export const SendMessageZod = z.object({
-  content: z.string().min(1, 'Message cannot be empty').max(4000, 'Message cannot exceed 4,000 characters'),
-  expectedVersion: z.number().int().nonnegative().optional(),
+  content: z
+    .string()
+    .trim()
+    .min(1, "Message cannot be empty")
+    .max(4000, "Message cannot exceed 4,000 characters"),
+  expectedVersion: z.number().int().positive(),
 });
 
 export const SubmitDiagnosisZod = z.object({
-  diagnosis: z.string().min(1, 'Diagnosis cannot be empty').max(500, 'Diagnosis cannot exceed 500 characters'),
+  diagnosis: z
+    .string()
+    .trim()
+    .min(1, "Diagnosis cannot be empty")
+    .max(500, "Diagnosis cannot exceed 500 characters"),
   reasoning: z.string().max(4000).optional().nullable(),
-  expectedVersion: z.number().int().nonnegative().optional(),
+  expectedVersion: z.number().int().positive(),
 });
 
 export const ReviewScenarioZod = z.object({
   expectedVersion: z.number().int().nonnegative(),
-  decision: z.enum(['APPROVED', 'REJECTED']),
-  reviewNote: z.string().min(1, 'Review note is required'),
+  decision: z.enum(["APPROVED", "REJECTED"]),
+  reviewNote: z
+    .string()
+    .trim()
+    .min(10, "A substantive review note is required")
+    .max(4000),
 });

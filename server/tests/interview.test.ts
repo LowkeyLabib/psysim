@@ -1,105 +1,89 @@
-import { describe, it, expect } from 'vitest';
-import { InterviewEvaluator } from '../src/interview/evaluator.js';
-import { CORE_OBJECTIVES } from '../src/knowledge/seedScenarios.js';
-import { InternalClinicalProfile, Message, Objective } from '../src/types/index.js';
-
-const mockScenario: InternalClinicalProfile = {
-  id: 'scen_test',
-  categoryId: 'depressive',
-  categoryName: 'Depressive disorders',
-  difficulty: 'beginner',
-  patient: {
-    name: 'Rahim',
-    age: 26,
-    gender: 'male',
-    occupation: 'Student',
-    personality: 'Reserved',
-    language: 'bn',
+import { expect, it, vi } from "vitest";
+import { InterviewEvaluator } from "../src/interview/evaluator";
+import { SEED_SCENARIOS } from "../src/knowledge/seedScenarios";
+import type { Message, Objective } from "../src/types";
+const scenario = SEED_SCENARIOS[0];
+const objectives = (): Objective[] =>
+  scenario.mandatoryObjectives.map((o) => ({
+    ...o,
+    completed: false,
+    evidenceMessageIds: [],
+    confidence: null,
+  }));
+const transcript: Message[] = [
+  {
+    id: "q",
+    role: "student",
+    content: "আপনার কী সমস্যা হচ্ছে, একটু বলবেন?",
+    createdAt: "1",
   },
-  presentingComplaint: 'Low mood',
-  openingMessage: {
-    en: 'Hello doctor',
-    bn: 'ডাক্তার সাহেব...',
-    banglish: 'Doctor shaheb...',
-    mixed: 'Hello doctor...',
+  {
+    id: "a",
+    role: "patient",
+    content: "দুই মাস ধরে মন খুব খারাপ থাকে, আগের মতো ভালো লাগে না।",
+    createdAt: "2",
   },
-  symptoms: ['Insomnia'],
-  symptomTimeline: { onset: '1 month', duration: '1 month', progression: 'worsening' },
-  psychiatricHistory: 'None',
-  medicalHistory: 'None',
-  medications: [],
-  substanceHistory: 'None',
-  riskFactors: [],
-  protectiveFactors: [],
-  negativeFindings: [],
-  approvedDiagnosis: { name: 'MDD', icd11Code: '6A70', dsm5Code: '296.2' },
-  acceptedDiagnoses: [],
-  mandatoryObjectives: CORE_OBJECTIVES,
-  reviewStatus: 'APPROVED',
-};
-
-describe('InterviewEvaluator', () => {
-  it('correctly detects English inquiry and marks objective completed with evidence', () => {
-    const transcript: Message[] = [
-      { id: 'm1', role: 'patient', content: 'Hello doctor', createdAt: '1' },
-      { id: 'm2', role: 'student', content: 'What problem brings you in today?', createdAt: '2' },
-    ];
-
-    const initialObjectives: Objective[] = CORE_OBJECTIVES.map((o) => ({
-      id: o.id,
-      title: o.title,
-      required: o.required,
-      completed: false,
-      evidenceMessageIds: [],
-      confidence: null,
-      guidance: o.guidance,
-    }));
-
-    const result = InterviewEvaluator.evaluateProgress(transcript, mockScenario, initialObjectives);
-    const presentingComp = result.objectives.find((o) => o.id === 'o0');
-
-    expect(presentingComp?.completed).toBe(true);
-    expect(presentingComp?.evidenceMessageIds).toContain('m2');
-  });
-
-  it('correctly detects Bengali & Banglish inquiries', () => {
-    const transcript: Message[] = [
-      { id: 'm1', role: 'patient', content: 'ডাক্তার সাহেব...', createdAt: '1' },
-      { id: 'm2', role: 'student', content: 'Apnar ei somossa koto din dhore shuru hoyeche?', createdAt: '2' },
-    ];
-
-    const initialObjectives: Objective[] = CORE_OBJECTIVES.map((o) => ({
-      id: o.id,
-      title: o.title,
-      required: o.required,
-      completed: false,
-      evidenceMessageIds: [],
-      confidence: null,
-      guidance: o.guidance,
-    }));
-
-    const result = InterviewEvaluator.evaluateProgress(transcript, mockScenario, initialObjectives);
-    const chronology = result.objectives.find((o) => o.id === 'o1');
-
-    expect(chronology?.completed).toBe(true);
-    expect(chronology?.evidenceMessageIds).toContain('m2');
-  });
-
-  it('correctly locks and unlocks submission eligibility based on mandatory objectives', () => {
-    const objectivesIncomplete: Objective[] = [
-      { id: 'o0', title: 'Presenting complaint', required: true, completed: true, evidenceMessageIds: ['m1'], confidence: 0.9 },
-      { id: 'o1', title: 'Onset, course & severity', required: true, completed: false, evidenceMessageIds: [], confidence: null },
-    ];
-
-    const result1 = InterviewEvaluator.evaluateProgress([], mockScenario, objectivesIncomplete);
-    expect(result1.eligible).toBe(false);
-
-    const objectivesComplete: Objective[] = [
-      { id: 'o0', title: 'Presenting complaint', required: true, completed: true, evidenceMessageIds: ['m1'], confidence: 0.9 },
-      { id: 'o1', title: 'Onset, course & severity', required: true, completed: true, evidenceMessageIds: ['m2'], confidence: 0.9 },
-    ];
-
-    const result2 = InterviewEvaluator.evaluateProgress([], mockScenario, objectivesComplete);
-    expect(result2.eligible).toBe(true);
-  });
+];
+const judgment = (evidence: unknown[], confidence = 0.96) => ({
+  objectives: [{ id: "o0", completed: true, confidence, evidence }],
 });
+const provider = (value: unknown) => ({
+  name: "test",
+  generateChat: vi.fn(),
+  generateStructured: vi.fn().mockResolvedValue(value),
+});
+it("does not complete objectives from keywords or unanswered inquiry", () => {
+  expect(
+    InterviewEvaluator.evaluateProgress(
+      transcript.slice(0, 1),
+      scenario,
+      objectives(),
+    ).eligible,
+  ).toBe(false);
+  expect(
+    InterviewEvaluator.evaluateProgress(
+      transcript,
+      scenario,
+      objectives(),
+    ).objectives.some((o) => o.completed),
+  ).toBe(false);
+});
+it("accepts exact evidence from both roles, preserves completed work and leaves other criteria locked", async () => {
+  const r = await InterviewEvaluator.assess(
+    transcript,
+    scenario,
+    objectives(),
+    provider(
+      judgment(transcript.map((m) => ({ messageId: m.id, quote: m.content }))),
+    ),
+  );
+  expect(r.objectives[0].completed).toBe(true);
+  expect(r.objectives[0].evidenceMessageIds).toEqual(["q", "a"]);
+  expect(r.eligible).toBe(false);
+  const again = await InterviewEvaluator.assess(
+    transcript,
+    scenario,
+    r.objectives,
+    provider({ objectives: [] }),
+  );
+  expect(again.objectives[0]).toEqual(r.objectives[0]);
+});
+it.each(["fabricated", "one-role", "low-confidence"])(
+  "rejects %s evidence",
+  async (kind) => {
+    const evidence = transcript.map((m) => ({
+      messageId: m.id,
+      quote: m.content,
+    }));
+    if (kind === "fabricated")
+      evidence[1].quote = "This quotation never occurred.";
+    if (kind === "one-role") evidence.pop();
+    const r = await InterviewEvaluator.assess(
+      transcript,
+      scenario,
+      objectives(),
+      provider(judgment(evidence, kind === "low-confidence" ? 0.6 : 0.96)),
+    );
+    expect(r.objectives[0].completed).toBe(false);
+  },
+);

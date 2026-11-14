@@ -1,6 +1,9 @@
-import { Request, Response, NextFunction } from 'express';
-import { UserProfile } from '../types/index.js';
-
+import { Request, Response, NextFunction } from "express";
+import { createHmac, timingSafeEqual } from "node:crypto";
+import { UserProfile } from "../types";
+import { config } from "../config";
+import { getSupabase } from "../db/supabase";
+import { AppError } from "./AppError";
 declare global {
   namespace Express {
     interface Request {
@@ -8,35 +11,112 @@ declare global {
     }
   }
 }
-
-export function authMiddleware(req: Request, _res: Response, next: NextFunction) {
-  // Support custom auth headers, Supabase token extraction, or default to demo trainee
-  const authHeader = req.headers.authorization;
-  const userId = (req.headers['x-user-id'] as string) || 'demo-student';
-  const role = ((req.headers['x-user-role'] as string) || 'student') as UserProfile['role'];
-  const displayName = (req.headers['x-user-name'] as string) || (role === 'supervisor' ? 'Prof. Supervisor' : 'Demo learner');
-
-  req.user = {
-    id: userId,
-    displayName,
-    email: `${userId}@psysim.edu`,
-    role,
-  };
-
-  next();
+const local = (req: Request) =>
+  ["127.0.0.1", "::1", "::ffff:127.0.0.1"].includes(
+    req.socket.remoteAddress || "",
+  );
+const signature = (value: string) =>
+  createHmac("sha256", config.devAuthSecret).update(value).digest("base64url");
+export function developmentLogin(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) {
+  if (!config.devAuth || !local(req) || config.devAuthSecret.length < 32)
+    return next(
+      new AppError(
+        403,
+        "DEV_AUTH_DISABLED",
+        "Local development sign-in is unavailable.",
+      ),
+    );
+  const payload = Buffer.from(
+    JSON.stringify({ id: "local-learner", exp: Date.now() + 86400000 }),
+  ).toString("base64url");
+  res.cookie("psysim_dev", `${payload}.${signature(payload)}`, {
+    httpOnly: true,
+    sameSite: "strict",
+    path: "/api",
+    maxAge: 86400000,
+  });
+  res.json({ success: true });
 }
-
-export function requireRole(allowedRoles: UserProfile['role'][]) {
-  return (req: Request, res: Response, next: NextFunction) => {
-    if (!req.user || !allowedRoles.includes(req.user.role)) {
-      res.status(403).json({
-        error: {
-          code: 'FORBIDDEN',
-          message: 'Insufficient clinical supervisor permissions to access this resource.',
-        },
-      });
-      return;
+export async function authMiddleware(
+  req: Request,
+  _res: Response,
+  next: NextFunction,
+) {
+  try {
+    const bearer = req.headers.authorization?.match(/^Bearer (.+)$/)?.[1];
+    if (bearer) {
+      const supabase = getSupabase();
+      if (!supabase)
+        throw new AppError(
+          503,
+          "AUTH_SETUP_REQUIRED",
+          "Supabase authentication is not configured.",
+        );
+      const { data, error } = await supabase.auth.getUser(bearer);
+      if (error || !data.user)
+        throw new AppError(401, "UNAUTHENTICATED", "Please sign in again.");
+      const user = data.user;
+      const role = user.app_metadata?.role;
+      req.user = {
+        id: user.id,
+        email: user.email || "",
+        displayName: String(
+          user.user_metadata?.display_name || "Learner",
+        ).slice(0, 100),
+        role:
+          role === "supervisor" || role === "administrator" ? role : "student",
+      };
+    } else if (
+      config.devAuth &&
+      local(req) &&
+      config.devAuthSecret.length >= 32
+    ) {
+      const cookie = req.headers.cookie
+        ?.split("; ")
+        .find((c) => c.startsWith("psysim_dev="))
+        ?.slice(11);
+      const [payload, mac] = (cookie || "").split(".");
+      if (payload && mac) {
+        const expected = signature(payload);
+        if (
+          mac.length === expected.length &&
+          timingSafeEqual(Buffer.from(mac), Buffer.from(expected))
+        ) {
+          const claims = JSON.parse(
+            Buffer.from(payload, "base64url").toString(),
+          );
+          if (claims.exp > Date.now() && claims.id === "local-learner")
+            req.user = {
+              id: claims.id,
+              displayName: "Local learner",
+              email: "local@psysim.invalid",
+              role: "student",
+            };
+        }
+      }
     }
+    if (!req.user)
+      throw new AppError(
+        401,
+        "UNAUTHENTICATED",
+        "Sign in to access your learning workspace.",
+      );
     next();
-  };
+  } catch (error) {
+    next(
+      error instanceof AppError
+        ? error
+        : new AppError(401, "UNAUTHENTICATED", "Please sign in again."),
+    );
+  }
+}
+export function requireRole(roles: UserProfile["role"][]) {
+  return (req: Request, _res: Response, next: NextFunction) =>
+    req.user && roles.includes(req.user.role)
+      ? next()
+      : next(new AppError(403, "FORBIDDEN", "Supervisor access is required."));
 }

@@ -1,134 +1,71 @@
-import { describe, it, expect, beforeEach } from 'vitest';
-import { InMemoryRepository } from '../src/db/repository.js';
-import { InternalClinicalProfile } from '../src/types/index.js';
-import { CORE_OBJECTIVES } from '../src/knowledge/seedScenarios.js';
-
-const mockScenario: InternalClinicalProfile = {
-  id: 'scen_test_01',
-  categoryId: 'depressive',
-  categoryName: 'Depressive disorders',
-  difficulty: 'beginner',
-  patient: {
-    name: 'Rahim',
-    age: 27,
-    gender: 'male',
-    occupation: 'Teacher',
-    personality: 'Quiet',
-    language: 'bn',
-  },
-  presentingComplaint: 'Low mood and fatigue',
-  openingMessage: {
-    en: 'Hello doctor, I have not been feeling well.',
-    bn: 'ডাক্তার সাহেব...',
-    banglish: 'Doctor shaheb...',
-    mixed: 'Hello doctor...',
-  },
-  symptoms: ['Insomnia', 'Fatigue', 'Loss of interest'],
-  symptomTimeline: { onset: '2 months ago', duration: 'Persistent', progression: 'Worsening' },
-  psychiatricHistory: 'No prior history',
-  medicalHistory: 'None',
-  medications: [],
-  substanceHistory: 'None',
-  riskFactors: ['Job stress'],
-  protectiveFactors: ['Supportive family'],
-  negativeFindings: ['No mania', 'No psychosis'],
-  approvedDiagnosis: {
-    name: 'Major Depressive Disorder',
-    icd11Code: '6A70',
-    dsm5Code: '296.22',
-  },
-  acceptedDiagnoses: [
-    { name: 'Major Depressive Disorder', isExact: true, synonyms: ['MDD', 'Depression'] },
-  ],
-  mandatoryObjectives: CORE_OBJECTIVES,
-  reviewStatus: 'APPROVED',
+import { it, expect } from "vitest";
+import { mkdtempSync, rmSync, realpathSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join, sep, basename } from "node:path";
+import { InMemoryRepository, SqliteRepository } from "../src/db/repository";
+import { SEED_SCENARIOS } from "../src/knowledge/seedScenarios";
+const scenario = SEED_SCENARIOS[0];
+const data = {
+  userId: "learner",
+  scenario,
+  mode: "challenge" as const,
+  difficulty: "beginner" as const,
+  language: "bn" as const,
+  isLive: true,
 };
-
-describe('InMemoryRepository', () => {
-  let repo: InMemoryRepository;
-
-  beforeEach(() => {
-    repo = new InMemoryRepository([mockScenario]);
+it("persists transcript, progress, immutable profile and retry receipts after restart", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "psysim-test-")),
+    file = join(dir, "state.sqlite");
+  let repo = new SqliteRepository(file, [scenario]);
+  try {
+    const s = await repo.createSession(data);
+    s.messages.push({
+      id: "student",
+      role: "student",
+      content: "আপনার কী সমস্যা?",
+      createdAt: s.createdAt,
+    });
+    s.progress.objectives[0].completed = true;
+    const updated = repo.commitSession(s, 1, undefined, {
+      key: "receipt",
+      signature: "payload",
+    });
+    const profile = await repo.getScenario(s.id);
+    repo.close();
+    repo = new SqliteRepository(file, []);
+    expect(await repo.getSession(s.id)).toEqual(updated);
+    expect(await repo.getScenario(s.id)).toEqual(profile);
+    expect(repo.getIdempotencyReceipt("receipt", "payload")).toEqual(updated);
+    expect(repo.owns(s.id, "learner")).toBe(true);
+    expect(repo.owns(s.id, "another")).toBe(false);
+    expect(() => repo.getIdempotencyReceipt("receipt", "changed")).toThrow(
+      "different content",
+    );
+    expect(() => repo.commitSession(s, 1)).toThrow("changed");
+  } finally {
+    repo.close();
+    if (
+      !realpathSync(dir).startsWith(realpathSync(tmpdir()) + sep) ||
+      !basename(dir).startsWith("psysim-test-")
+    )
+      throw new Error("Unsafe test cleanup path");
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+it("editing a template cannot change an existing session profile or preserve approval", async () => {
+  const repo = new InMemoryRepository([
+    { ...scenario, reviewStatus: "APPROVED" },
+  ]);
+  const s = await repo.createSession({
+    ...data,
+    scenario: { ...scenario, reviewStatus: "APPROVED" },
   });
-
-  it('creates and retrieves a session correctly', async () => {
-    const session = await repo.createSession({
-      userId: 'usr_001',
-      scenario: mockScenario,
-      mode: 'challenge',
-      difficulty: 'beginner',
-      language: 'en',
-      isLive: false,
-    });
-
-    expect(session.id).toBeDefined();
-    expect(session.state).toBe('IN_PROGRESS');
-    expect(session.patient.name).toBe('Rahim');
-
-    const fetched = await repo.getSession(session.id);
-    expect(fetched).not.toBeNull();
-    expect(fetched?.id).toBe(session.id);
-  });
-
-  it('updates session status along state machine', async () => {
-    const session = await repo.createSession({
-      userId: 'usr_001',
-      scenario: mockScenario,
-      mode: 'challenge',
-      difficulty: 'beginner',
-      language: 'en',
-      isLive: false,
-    });
-
-    await repo.updateSession(session.id, (s) => {
-      s.state = 'INTERVIEW_COMPLETE';
-    });
-    const updated = await repo.getSession(session.id);
-    expect(updated?.state).toBe('INTERVIEW_COMPLETE');
-  });
-
-  it('persists dialogue messages', async () => {
-    const session = await repo.createSession({
-      userId: 'usr_001',
-      scenario: mockScenario,
-      mode: 'challenge',
-      difficulty: 'beginner',
-      language: 'en',
-      isLive: false,
-    });
-
-    await repo.updateSession(session.id, (s) => {
-      s.messages.push({
-        id: 'msg_test',
-        role: 'student',
-        content: 'How can I help you?',
-        createdAt: new Date().toISOString(),
-      });
-    });
-
-    const fetched = await repo.getSession(session.id);
-    expect(fetched?.messages).toHaveLength(2);
-    expect(fetched?.messages[1].content).toBe('How can I help you?');
-  });
-
-  it('initializes and updates mandatory interview objectives', async () => {
-    const session = await repo.createSession({
-      userId: 'usr_001',
-      scenario: mockScenario,
-      mode: 'challenge',
-      difficulty: 'beginner',
-      language: 'en',
-      isLive: false,
-    });
-
-    expect(session.progress.objectives.length).toBeGreaterThan(0);
-    expect(session.progress.objectives[0].completed).toBe(false);
-
-    await repo.updateSession(session.id, (s) => {
-      s.progress.objectives[0].completed = true;
-    });
-
-    const updated = await repo.getSession(session.id);
-    expect(updated?.progress.objectives[0].completed).toBe(true);
-  });
+  const original = await repo.getScenario(s.id);
+  const [draft] = await repo.getScenarioDrafts();
+  await repo.saveScenarioDraft(
+    { ...draft, status: "DRAFT", clinicalProfile: {} },
+    draft.version,
+  );
+  expect((await repo.getScenario(scenario.id))?.reviewStatus).toBe("DRAFT");
+  expect(await repo.getScenario(s.id)).toEqual(original);
 });

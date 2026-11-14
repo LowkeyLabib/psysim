@@ -1,82 +1,71 @@
 # PsySim
 
-A React/TypeScript frontend for a multilingual, text-only psychiatric interview training platform.
+Text-only psychiatric interview practice with fictional patients, built with React, TypeScript, Express and a server-side AI provider. The interface uses charcoal `#1E1E1C`, sand `#D8CBB3` and electric blue `#2F6BFF` throughout.
 
-**Delivery status:** frontend and proposed integration contract implemented. The complete live MVP is **not** available yet. Gemini owns the backend, Supabase schema/RLS, patient engine, clinical assessment, diagnostic matching and source ingestion. No clinician-approved cases, AI calls, database migrations or live clinical evaluation are included in this delivery.
+## Current release
 
-## Run locally
+Faiaz's work through `24dfb65` is integrated into `dev-frontend`, preserving both Git histories and the alternate `client/` source. The root `src/` application is the supported frontend. Live AI, persistent local sessions, evidence-based interview gates, diagnosis evaluation and feedback work through the Express API. No provider keys or hidden case profiles are sent to the browser.
 
-Requires Node.js 24.15+ on the Node 24 LTS line (verified with 24.20.0) and npm.
+**This is a development release, not a clinically validated teaching deployment.** The seven imported cases and their three interview-style variants are labeled unreviewed development material. They are excluded from production selection. No Supabase or hosting project is provisioned. Nothing is deployed by pushing this branch; the Pages workflow is manual only.
+
+## Local setup
+
+Use Node.js 24 and npm. From the repository root:
 
 ```powershell
 npm ci
-Copy-Item .env.example .env.local
+npm ci --prefix server
+npm run setup:local
+```
+
+The setup script creates missing `.env.local` and `server/.env` files, generates a local authentication signing secret, and preserves existing files. Set `GEMINI_API_KEY` privately in `server/.env`. Never use a `VITE_` variable for a provider key. This workstation already has local configuration; rerunning setup will not overwrite it.
+
+Start these in separate terminals:
+
+```powershell
+npm run dev:server
+```
+
+```powershell
 npm run dev
 ```
 
-Open the Local URL printed by Vite. `.env.example` explicitly enables the development demo. Its scripted responses and browser-local persistence allow the frontend workflow to run without accounts or API keys. Demo progress changes only through labeled controls and results always say REVIEW_REQUIRED. Category/difficulty choices are carried through the interface but do not generate varied clinical scenarios in demo mode.
+Open `http://127.0.0.1:5173` and select **Enter local workspace**. Vite proxies `/api` to the backend on port 5000. Local authentication is a signed, HTTP-only, same-site cookie for one local learner; it grants no supervisor privileges. Saved sessions, immutable case snapshots, progress, results and retry receipts live in ignored `server/data/psysim.sqlite` and survive restarts. Keep the backend working directory at `server/`, as the npm scripts do.
+
+For a UI-only preview, use `VITE_DEMO_MODE=true` in `.env.local`. This explicit development adapter uses scripted messages, manual preview progress controls and ungraded results. It never replaces a failed live request. Both frontend development flags are compiled out in production.
+
+## Verification
 
 ```powershell
 npm test
+npm test --prefix server
 npm run build
-npm run preview
+npm run build --prefix server
 ```
 
-`npm test` runs focused Vitest/Testing Library integration and transport tests. Thread workers avoid restricted Windows child-process spawning. `npm run build` type-checks and creates `dist/`.
+See [verification evidence](docs/VERIFICATION.md), [API contract](docs/API_CONTRACT.md), [architecture](docs/ARCHITECTURE.md), and [integration report](docs/INTEGRATION_REPORT.md). CI verifies both packages without deployment or provider credentials.
 
-## Implemented frontend
+## Configuration
 
-- Supabase email/password sign-in and sign-up, email-confirmation messaging, auth-state updates, protected routes and backend profile roles.
-- Responsive dashboard, aggregate statistics, recent sessions and paginated history.
-- Clinical Challenge and Custom Case setup; seven category options in the demo; three difficulty levels and four conversation-language settings.
-- Unicode text consultation, timer, transcript, required/optional objectives, evidence links, beginner guidance and reduced advanced guidance.
-- Submission locking based on backend session state and eligibility; optional reasoning; final confirmation; finalized sessions cannot continue.
-- Four distinct result outcomes, approved diagnosis display, evidence-linked feedback, separate interview rubric, learning points and transcript review.
-- Supervisor case creation/editing, JSON clinical-profile authoring, source-reference IDs, objective configuration, configurable rubric criteria/weights and review actions. Demo drafts cannot be approved.
-- Authenticated HTTP adapter, safe connection errors, timeouts, opaque-ID encoding, version checks and stable mutation keys. No automatic mutation retries or live-to-demo fallback.
-- Keyboard focus states, dialog focus containment, reduced-motion support, mobile navigation, and Bengali-compatible system font fallbacks.
+| Scope                   | Variables                                                                 | Purpose                                                                                          |
+| ----------------------- | ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| Server AI               | `AI_PROVIDER`, `GEMINI_API_KEY`, `GEMINI_MODEL`                           | Explicit provider selection; Gemini is configured locally                                        |
+| Optional Groq           | `GROQ_API_KEY`, `GROQ_MODEL`                                              | Used only when `AI_PROVIDER=groq`; not a fallback                                                |
+| Server authentication   | `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`                                | Required for production bearer authentication; `SUPABASE_ANON_KEY` remains a compatibility alias |
+| Local authentication    | `DEV_AUTH_ENABLED`, `DEV_AUTH_SECRET`                                     | Loopback-only, non-production signed cookie; random secret at least 32 characters                |
+| Case access             | `ALLOW_UNREVIEWED_CASES`                                                  | Development-only opt-in for demonstration fixtures                                               |
+| Runtime                 | `NODE_ENV`, `HOST`, `PORT`, `CORS_ORIGIN`, `DATABASE_FILE`                | Server binding, one allowed frontend origin and durable SQLite location                          |
+| Browser public settings | `VITE_API_BASE_URL`, `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY` | Public API and authentication configuration                                                      |
+| Browser development     | `VITE_LOCAL_DEVELOPMENT`, `VITE_DEMO_MODE`                                | Local server login or isolated UI preview; development builds only                               |
 
-## Environment
+The configured model is `gemini-3.5-flash-lite`, verified with real generation and structured assessment on 14 November 2026. The formerly configured `gemini-2.5-flash` rejected generation for this credential despite appearing in model discovery. There is no automatic model/provider substitution. See Google's [model catalog](https://aistudio.google.com/docs/models) and [thinking configuration](https://aistudio.google.com/docs/thinking?generate-content=true) before changing models. Gemini 3 requests use low thinking; thought parts are excluded from patient replies.
 
-| Variable | Meaning |
-| --- | --- |
-| `VITE_DEMO_MODE` | `true` explicitly enables local UI demo; otherwise live mode |
-| `VITE_API_BASE_URL` | Backend base URL including `/api`, e.g. `http://localhost:3001/api` |
-| `VITE_SUPABASE_URL` | Your Supabase project URL |
-| `VITE_SUPABASE_PUBLISHABLE_KEY` | Public browser publishable key only |
+## Before hosting
 
-Live mode requires the last three values. Restart Vite after configuration changes; rebuild production assets after build-time changes. Never place Gemini/Groq keys or Supabase service-role secrets in `VITE_` variables. Configure Supabase email/password Auth and the frontend `/auth` redirect URL. The frontend uses Supabase only for Auth, never clinical table queries. Token validation, ownership and permissions remain backend responsibilities.
+- Connect the institution's Supabase Auth project. Verify real sign-up, email confirmation, sign-in, expiration and sign-out. Roles must be assigned through trusted `app_metadata`, never student-editable metadata or profile rows.
+- Have qualified reviewers author and approve clinical cases, accepted terminology, objective criteria and source references. The original source registry is only a list of candidates; its content was not ingested or licensed by this integration.
+- Run the current SQLite repository with **one backend process on a persistent volume**, backups and a suitable access/retention policy. It is not a multi-instance or ephemeral-serverless repository. Choose and implement a production database adapter before using those hosting models.
+- The imported `server/migrations/001_initial_schema.sql` is preserved for review, **not applied or used** by the current repository. It contains permissive legacy policies and is not safe to apply as a production setup. A future Supabase adapter must use reviewed, backward-compatible hardening migrations and tests.
+- Configure public frontend build variables and private server variables separately. Use HTTPS, the exact frontend CORS origin, disable development flags, and configure SPA deep-link fallback. A static GitHub Pages site alone cannot run the private backend.
 
-## Repository and collaboration
-
-- `src/pages/`: authentication, dashboard/history, setup, consultation, results, supervisor and guide.
-- `src/components/`: layout, loading/error states and accessible modal.
-- `src/lib/`: configuration, authentication, HTTP adapter, isolated demo adapter and session helpers.
-- `src/test/`: focused integration and transport tests.
-- `shared/contracts.ts`: proposed typed public contract.
-- `docs/API_CONTRACT.md`: endpoint payloads, lifecycle, errors and security requirements.
-- `docs/ARCHITECTURE.md`: ownership and data flow.
-- `docs/GEMINI_HANDOFF.md`: backend integration work and acceptance requirements.
-- `docs/VERIFICATION.md`: checks performed and verification limits.
-- `vercel.json`: frontend SPA rewrite and basic response headers; does not deploy anything.
-
-Work is on `dev-frontend`. Backend work belongs on `dev-backend`. Shared contract v1 is **proposed and awaiting Gemini review**. Do not merge or deploy automatically. No Git remote existed at project inspection; commits are local only.
-
-## Backend integration and release
-
-Read `docs/GEMINI_HANDOFF.md` and agree on the contract first. Implement the `/api` routes listed there, then configure live environment values and test a complete authenticated student/supervisor flow against real services. The browser is not a security boundary. Enforce eligibility, approved-case selection, immutable finalization, idempotency, roles and ownership independently on the server.
-
-For a later authorized frontend deployment, use Vite, build command `npm run build`, output `dist`, and the included SPA rewrite. Deploy the Node backend independently with HTTPS and explicit CORS origins. No hosting project was registered or deployed. Production readiness additionally requires clinical review, licensed-source ingestion, backend security tests and migrations supplied by Gemini.
-
-## Known limits
-
-- Live auth, provider behavior, medical correctness, RLS and server persistence cannot be verified without the backend/services.
-- UI text is English; conversation and diagnosis input support Bengali, Banglish and mixed language. Language understanding is a backend capability.
-- Demo state is local to one browser and is not secure, multi-user storage or a concurrency test of the backend. Demo data can be reset by removing the `psysim-demo-v1` storage entry.
-- Clinical-profile JSON validation and reviewer eligibility must be authoritative on the backend. No medical sources were ingested or asserted as licensed/approved here.
-- No voice, audio, automatic deployment, paid AI fallback, or secrets are included.
-
-Auth implementation was checked against the official [sign-in](https://supabase.com/docs/reference/javascript/auth-signinwithpassword), [sign-up](https://supabase.com/docs/reference/javascript/auth-signup), and [auth-state](https://supabase.com/docs/reference/javascript/auth-onauthstatechange) documentation and [changelog](https://supabase.com/changelog.md).
-
-
-The SPA hosting configuration follows the official [Vite on Vercel guidance](https://vercel.com/docs/frameworks/frontend/vite).
+No voice, speech, video, avatars or production cloud changes are included.

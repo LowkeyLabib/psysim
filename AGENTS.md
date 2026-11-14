@@ -1,12 +1,7 @@
-# PsySim collaboration
+# Final integration authorization (14 November 2026)
 
-- Codex owns `src/`, frontend configuration and frontend tests, on `dev-frontend`.
-- Gemini owns `server/`, `supabase/`, clinical sources, simulation and evaluation, on `dev-backend`.
-- `shared/`, root package files and `docs/` are shared: document proposed changes before integration. Never overwrite another agent's files.
-- Contract v1 in `docs/API_CONTRACT.md` is PROPOSED, awaiting Gemini review. Frontend work may use this proposal; integration must resolve differences explicitly.
-- Only the backend may authorize users, choose approved cases, evaluate objectives or diagnoses, or disclose post-submission answers.
-- Never send hidden profiles, answer keys, evaluator instructions or secrets to student clients.
-- Demo mode is UI development only, must be visibly labeled, and must never claim AI or clinical validation.
-- Use synthetic data. Never claim demonstration cases are clinician-approved.
-- No automatic merge, deploy, or push to main. Use small commits and preserve ownership boundaries.
-- Run `npm test` and `npm run build` for frontend changes affecting the main workflow.
+The user explicitly authorized Codex to integrate Faiaz's backend/frontend work, repair shared contracts and security, redesign all screens, configure server-only AI credentials locally, test, commit and push `dev-frontend`. This supersedes the earlier frontend-only ownership restriction for this integration task. Preserve authorship/history and the alternate `client/` implementation. Do not merge to main, force-push, or deploy. There is no designated Supabase/hosting project; do not change unrelated projects.
+
+Keep all hidden case data and provider credentials server-side. No browser AI SDK or credential collection. Live provider failures must not fall back to mock responses. Demo cases have no clinical approval evidence and must remain clearly identified as unreviewed development material. Only backend-verified roles can review cases. Never log provider error bodies, transcripts, prompts or secrets.
+
+Run focused frontend and backend tests and both builds. Keep the shared API documented. Push only after confirming tracked/build artifacts contain no credentials.
