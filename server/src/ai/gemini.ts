@@ -1,4 +1,4 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { GoogleGenerativeAI, HarmBlockThreshold, HarmCategory, type SafetySetting } from '@google/generative-ai';
 import { IAIProvider, ChatMessage } from './provider.js';
 import { config } from '../config/index.js';
 
@@ -8,6 +8,13 @@ const FALLBACK_MODELS = [
   'gemini-2.0-flash',
   'gemini-flash-latest',
 ] as const;
+
+const CLINICAL_SAFETY_SETTINGS: SafetySetting[] = [
+  { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_NONE },
+  { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_NONE },
+  { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_NONE },
+  { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_NONE },
+];
 
 type GeminiHistoryItem = { role: 'user' | 'model'; parts: Array<{ text: string }> };
 
@@ -95,9 +102,10 @@ export class GeminiProvider implements IAIProvider {
         const model = client.getGenerativeModel({
           model: candidate,
           systemInstruction: systemMessage?.content,
+          safetySettings: CLINICAL_SAFETY_SETTINGS,
           generationConfig: {
             temperature: options?.temperature ?? 0.7,
-            maxOutputTokens: options?.maxTokens ?? 1000,
+            maxOutputTokens: options?.maxTokens ?? 2048,
           },
         });
 
