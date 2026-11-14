@@ -76,6 +76,12 @@ export default function Consultation() {
     };
   }, [id, revision]);
   useEffect(() => {
+    const onKeyChange = () => setRevision((n) => n + 1);
+    window.addEventListener("psysim_api_key_changed", onKeyChange);
+    return () =>
+      window.removeEventListener("psysim_api_key_changed", onKeyChange);
+  }, []);
+  useEffect(() => {
     if (
       session?.state !== "DIAGNOSIS_SUBMITTED" &&
       session?.state !== "CREATED"
@@ -186,9 +192,26 @@ export default function Consultation() {
                 {session.patient.age} years · {session.patient.occupation}
               </p>
             </div>
-            <span className="patient-status">
-              <i />
-              {session.simulation === "mock" ? "Scripted demo" : "AI patient"}
+            <span
+              className="patient-status"
+              style={
+                session.simulation === "live"
+                  ? { color: "#6ee7b7", fontWeight: 600 }
+                  : undefined
+              }
+            >
+              <i
+                style={
+                  session.simulation === "live"
+                    ? { background: "#34d399" }
+                    : undefined
+                }
+              />
+              {session.simulation === "mock"
+                ? "Scripted demo"
+                : session.simulation === "live"
+                  ? "Live Gemini AI Patient"
+                  : "AI patient"}
             </span>
           </header>
           <div className="conversation-intro">
@@ -196,6 +219,7 @@ export default function Consultation() {
             <span>
               A space to listen, explore, and understand. ·{" "}
               {languageNames[session.language]}
+              {session.simulation === "live" ? " · Live Gemini AI Active" : ""}
             </span>
           </div>
           <div

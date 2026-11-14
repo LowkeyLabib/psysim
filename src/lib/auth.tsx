@@ -8,8 +8,12 @@ import {
 import type { UserProfile } from "../../shared/contracts";
 import { api, ApiError, localSignIn, localSignOut } from "./api";
 import { demoMode, setupMissing, localDevelopment } from "./config";
+import { getGeminiApiKey } from "./geminiKey";
 import { supabase } from "./supabase";
 import { errorMessage } from "./session";
+
+const STANDALONE_ACTIVE_KEY = "psysim_standalone_active";
+const standaloneMode = !demoMode && !localDevelopment && !supabase;
 
 interface AuthValue {
   user: UserProfile | null;
@@ -18,6 +22,7 @@ interface AuthValue {
   refresh: () => void;
   signOut: () => Promise<void>;
   enterLocal: () => Promise<void>;
+  enterStandalone: () => Promise<void>;
 }
 
 const Context = createContext<AuthValue | null>(null);
@@ -52,6 +57,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             if (!(e instanceof ApiError && e.status === 401)) throw e;
             if (active && current === generation) setUser(null);
           }
+        } else if (standaloneMode) {
+          const pref = localStorage.getItem(STANDALONE_ACTIVE_KEY);
+          const isSignedIn =
+            pref === "true" || (pref === null && Boolean(getGeminiApiKey()));
+          if (isSignedIn) {
+            const profile = await api.me();
+            if (active && current === generation) setUser(profile);
+          } else if (active && current === generation) {
+            setUser(null);
+          }
         } else if (active && current === generation) setUser(null);
       } catch (e) {
         if (active && current === generation) {
@@ -79,12 +94,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setRevision((v) => v + 1);
   };
 
+  const enterStandalone = async () => {
+    try {
+      localStorage.setItem(STANDALONE_ACTIVE_KEY, "true");
+    } catch {
+      // ignore storage failure
+    }
+    setRevision((v) => v + 1);
+  };
+
   const signOut = async () => {
     if (supabase) {
       const { error } = await supabase.auth.signOut();
       if (error) throw error;
     }
     if (localDevelopment) await localSignOut();
+    if (standaloneMode) {
+      try {
+        localStorage.setItem(STANDALONE_ACTIVE_KEY, "false");
+      } catch {
+        // ignore storage failure
+      }
+    }
     setUser(null);
   };
 
@@ -97,6 +128,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         refresh: () => setRevision((v) => v + 1),
         signOut,
         enterLocal,
+        enterStandalone,
       }}
     >
       {children}
