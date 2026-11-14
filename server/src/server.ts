@@ -40,6 +40,11 @@ app.get("/api/health", (_req, res) =>
     provider: config.aiProvider,
     development: config.nodeEnv !== "production",
     unreviewedCases: config.allowUnreviewed,
+    neon: {
+      postgres: config.neon.isPostgresConfigured,
+      auth: config.neon.isAuthConfigured,
+      aiGateway: config.neon.isAiGatewayConfigured,
+    },
   }),
 );
 app.post("/api/auth/development", developmentLogin);

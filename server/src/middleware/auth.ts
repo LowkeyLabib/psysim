@@ -1,9 +1,79 @@
 import { Request, Response, NextFunction } from "express";
-import { createHmac, timingSafeEqual } from "node:crypto";
+import { createHmac, createPublicKey, timingSafeEqual, verify } from "node:crypto";
 import { UserProfile } from "../types";
 import { config } from "../config";
 import { getSupabase } from "../db/supabase";
 import { AppError } from "./AppError";
+
+interface JwkKey {
+  kid?: string;
+  kty: string;
+  alg?: string;
+  [key: string]: unknown;
+}
+
+let cachedJwks: { keys: JwkKey[]; fetchedAt: number } | null = null;
+
+async function verifyNeonAuthJwt(token: string): Promise<UserProfile> {
+  const parts = token.split(".");
+  if (parts.length !== 3) {
+    throw new AppError(401, "UNAUTHENTICATED", "Please sign in again.");
+  }
+  const [headerB64, payloadB64, sigB64] = parts;
+  const header = JSON.parse(Buffer.from(headerB64, "base64url").toString()) as {
+    kid?: string;
+    alg?: string;
+  };
+  const claims = JSON.parse(Buffer.from(payloadB64, "base64url").toString()) as {
+    sub?: string;
+    email?: string;
+    name?: string;
+    role?: string;
+    exp?: number;
+  };
+
+  if (!claims.sub || (claims.exp && claims.exp * 1000 < Date.now())) {
+    throw new AppError(401, "UNAUTHENTICATED", "Please sign in again.");
+  }
+
+  if (!cachedJwks || Date.now() - cachedJwks.fetchedAt > 300_000) {
+    const res = await fetch(config.neon.authJwksUrl);
+    if (!res.ok) {
+      throw new AppError(503, "AUTH_UNAVAILABLE", "Neon Auth verification unavailable.");
+    }
+    const body = (await res.json()) as { keys?: JwkKey[] };
+    cachedJwks = { keys: body.keys || [], fetchedAt: Date.now() };
+  }
+
+  const jwk =
+    cachedJwks.keys.find((k) => !header.kid || k.kid === header.kid) ||
+    cachedJwks.keys[0];
+  if (!jwk) {
+    throw new AppError(401, "UNAUTHENTICATED", "Please sign in again.");
+  }
+
+  const publicKey = createPublicKey({ key: jwk as never, format: "jwk" });
+  const alg = header.alg === "EdDSA" ? null : "sha256";
+  const valid = verify(
+    alg,
+    Buffer.from(`${headerB64}.${payloadB64}`),
+    publicKey,
+    Buffer.from(sigB64, "base64url"),
+  );
+  if (!valid) {
+    throw new AppError(401, "UNAUTHENTICATED", "Please sign in again.");
+  }
+
+  return {
+    id: claims.sub,
+    email: claims.email || "",
+    displayName: String(claims.name || "Learner").slice(0, 100),
+    role:
+      claims.role === "supervisor" || claims.role === "administrator"
+        ? claims.role
+        : "student",
+  };
+}
 declare global {
   namespace Express {
     interface Request {
@@ -50,26 +120,30 @@ export async function authMiddleware(
     const bearer = req.headers.authorization?.match(/^Bearer (.+)$/)?.[1];
     if (bearer) {
       const supabase = getSupabase();
-      if (!supabase)
+      if (supabase) {
+        const { data, error } = await supabase.auth.getUser(bearer);
+        if (error || !data.user)
+          throw new AppError(401, "UNAUTHENTICATED", "Please sign in again.");
+        const user = data.user;
+        const role = user.app_metadata?.role;
+        req.user = {
+          id: user.id,
+          email: user.email || "",
+          displayName: String(
+            user.user_metadata?.display_name || "Learner",
+          ).slice(0, 100),
+          role:
+            role === "supervisor" || role === "administrator" ? role : "student",
+        };
+      } else if (config.neon.isAuthConfigured) {
+        req.user = await verifyNeonAuthJwt(bearer);
+      } else {
         throw new AppError(
           503,
           "AUTH_SETUP_REQUIRED",
-          "Supabase authentication is not configured.",
+          "Authentication is not configured.",
         );
-      const { data, error } = await supabase.auth.getUser(bearer);
-      if (error || !data.user)
-        throw new AppError(401, "UNAUTHENTICATED", "Please sign in again.");
-      const user = data.user;
-      const role = user.app_metadata?.role;
-      req.user = {
-        id: user.id,
-        email: user.email || "",
-        displayName: String(
-          user.user_metadata?.display_name || "Learner",
-        ).slice(0, 100),
-        role:
-          role === "supervisor" || role === "administrator" ? role : "student",
-      };
+      }
     } else if (
       config.devAuth &&
       local(req) &&

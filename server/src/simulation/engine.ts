@@ -1,6 +1,7 @@
 import { IAIProvider, ChatMessage } from "../ai/provider";
 import { GeminiProvider } from "../ai/gemini";
 import { GroqProvider } from "../ai/groq";
+import { NeonAiGatewayProvider } from "../ai/neonGateway";
 import { MockSimulationProvider } from "../ai/mock";
 import { config } from "../config";
 import { InternalClinicalProfile, Message, Language } from "../types";
@@ -9,6 +10,8 @@ import { AppError } from "../middleware/AppError";
 export function createProvider(): IAIProvider {
   if (config.aiProvider === "gemini") return new GeminiProvider();
   if (config.aiProvider === "groq") return new GroqProvider();
+  if (config.aiProvider === "neon-ai-gateway")
+    return new NeonAiGatewayProvider();
   if (config.aiProvider === "mock" && config.nodeEnv !== "production")
     return new MockSimulationProvider();
   throw new AppError(

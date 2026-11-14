@@ -1,12 +1,12 @@
 const STORAGE_KEY = 'psysim_gemini_api_key';
 const STORAGE_MODEL_KEY = 'psysim_gemini_model';
-const DEFAULT_GEMINI_MODEL = 'gemini-2.5-flash';
+const DEFAULT_GEMINI_MODEL = 'gemini-3.5-flash-lite';
 
 export const FALLBACK_GEMINI_MODELS = [
-  'gemini-2.5-flash',
   'gemini-3.5-flash-lite',
+  'gemini-3.5-flash',
+  'gemini-2.5-flash',
   'gemini-2.5-flash-lite',
-  'gemini-2.0-flash',
   'gemini-flash-latest',
 ] as const;
 
