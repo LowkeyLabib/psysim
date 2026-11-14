@@ -1,19 +1,32 @@
 import { useState, type FormEvent } from "react";
 import { Navigate } from "react-router-dom";
-import { ArrowRight, LockKeyhole, Sparkles } from "lucide-react";
+import { ArrowRight, KeyRound, LockKeyhole, Sparkles } from "lucide-react";
 import { supabase } from "../lib/supabase";
-import { setupMissing, localDevelopment } from "../lib/config";
+import { setupMissing, localDevelopment, demoMode } from "../lib/config";
+import { getGeminiApiKey, maskGeminiApiKey } from "../lib/geminiKey";
+
+const standaloneMode = !demoMode && !localDevelopment && !supabase;
 import { useAuth } from "../lib/auth";
 import { errorMessage } from "../lib/session";
 import { Logo } from "../components/Layout";
+import { GeminiKeyModal } from "../components/GeminiKeyModal";
 import { ErrorNotice, Loading } from "../components/ui";
 
 export default function Auth() {
-  const { user, loading, error: profileError, refresh, enterLocal } = useAuth();
+  const {
+    user,
+    loading,
+    error: profileError,
+    refresh,
+    enterLocal,
+    enterStandalone,
+  } = useAuth();
   const [signup, setSignup] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [keyModalOpen, setKeyModalOpen] = useState(false);
+  const [savedKey, setSavedKey] = useState(() => getGeminiApiKey());
 
   if (loading) return <Loading />;
   if (user) return <Navigate to="/" replace />;
@@ -114,6 +127,61 @@ export default function Auth() {
                 {busy ? "Connecting…" : "Enter local workspace"}
                 <ArrowRight size={17} />
               </button>
+            </div>
+          ) : standaloneMode ? (
+            <div className="setup-panel">
+              <span className="badge sage">STANDALONE LIVE AI</span>
+              <h3>Connect Gemini AI &amp; Practice</h3>
+              <p>
+                {savedKey
+                  ? `Gemini API key (${maskGeminiApiKey(savedKey)}) is connected. Enter your clinical workspace to interview live AI psychiatric patients.`
+                  : "Enter your free Google Gemini API key to interview live AI psychiatric patients in English, বাংলা, or Banglish directly in your browser."}
+              </p>
+              {(error || profileError) && (
+                <ErrorNotice message={error || profileError} />
+              )}
+              <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                <button
+                  type="button"
+                  className="button primary full"
+                  disabled={busy}
+                  onClick={async () => {
+                    setBusy(true);
+                    setError("");
+                    try {
+                      await enterStandalone();
+                    } catch (e) {
+                      setError(errorMessage(e));
+                    } finally {
+                      setBusy(false);
+                    }
+                  }}
+                >
+                  <Sparkles size={16} />
+                  {busy ? "Opening…" : "Enter clinical workspace"}
+                  <ArrowRight size={17} />
+                </button>
+                <button
+                  type="button"
+                  className="button secondary full"
+                  onClick={() => setKeyModalOpen(true)}
+                >
+                  <KeyRound size={16} />
+                  {savedKey ? "Manage Gemini API Key" : "Set Gemini API Key"}
+                </button>
+              </div>
+              <GeminiKeyModal
+                isOpen={keyModalOpen}
+                onClose={() => {
+                  setSavedKey(getGeminiApiKey());
+                  setKeyModalOpen(false);
+                }}
+                onIntegrated={() => {
+                  setSavedKey(getGeminiApiKey());
+                  setKeyModalOpen(false);
+                  void enterStandalone();
+                }}
+              />
             </div>
           ) : setupMissing ? (
             <div className="setup-panel">

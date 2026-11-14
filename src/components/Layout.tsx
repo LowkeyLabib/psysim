@@ -1,10 +1,15 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, NavLink, Outlet, useNavigate } from "react-router-dom";
-import { Menu, X, LogOut, ArrowUpRight } from "lucide-react";
+import { Menu, X, LogOut, ArrowUpRight, KeyRound, Sparkles } from "lucide-react";
 import { useAuth } from "../lib/auth";
 import { demoMode, localDevelopment } from "../lib/config";
+import { getGeminiApiKey } from "../lib/geminiKey";
+import { supabase } from "../lib/supabase";
 import { errorMessage } from "../lib/session";
+import { GeminiKeyModal } from "./GeminiKeyModal";
 import { ErrorNotice } from "./ui";
+
+const standaloneMode = !demoMode && !localDevelopment && !supabase;
 export function Logo() {
   return (
     <Link className="logo" to="/" aria-label="PsySim home">
@@ -20,6 +25,14 @@ export default function Layout() {
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [error, setError] = useState("");
+  const [keyModalOpen, setKeyModalOpen] = useState(false);
+  const [hasApiKey, setHasApiKey] = useState(() => Boolean(getGeminiApiKey()));
+
+  useEffect(() => {
+    const syncKey = () => setHasApiKey(Boolean(getGeminiApiKey()));
+    window.addEventListener("psysim_api_key_changed", syncKey);
+    return () => window.removeEventListener("psysim_api_key_changed", syncKey);
+  }, []);
   return (
     <div className="app-shell">
       <a className="skip-link" href="#main">
@@ -60,6 +73,50 @@ export default function Layout() {
           )}
         </nav>
         <div className="header-user">
+          {standaloneMode && (
+            <button
+              type="button"
+              onClick={() => setKeyModalOpen(true)}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "6px",
+                padding: "6px 12px",
+                borderRadius: "9999px",
+                fontSize: "11px",
+                fontWeight: 600,
+                background: hasApiKey
+                  ? "rgba(16, 185, 129, 0.14)"
+                  : "rgba(47, 107, 255, 0.14)",
+                border: hasApiKey
+                  ? "1px solid rgba(16, 185, 129, 0.45)"
+                  : "1px solid rgba(47, 107, 255, 0.45)",
+                color: hasApiKey ? "#6ee7b7" : "var(--sand)",
+                whiteSpace: "nowrap",
+              }}
+              title="Configure your Google Gemini API key for live AI consultations"
+            >
+              {hasApiKey ? (
+                <>
+                  <span
+                    style={{
+                      width: 6,
+                      height: 6,
+                      borderRadius: "50%",
+                      background: "#34d399",
+                    }}
+                  />
+                  <Sparkles size={13} />
+                  <span>Gemini Live AI Active</span>
+                </>
+              ) : (
+                <>
+                  <KeyRound size={13} />
+                  <span>Set Gemini API Key</span>
+                </>
+              )}
+            </button>
+          )}
           <span className="avatar">{user?.displayName.slice(0, 1)}</span>
           <span>{user?.displayName}</span>
           {!demoMode && (
@@ -80,17 +137,33 @@ export default function Layout() {
           )}
         </div>
       </header>
-      {(demoMode || localDevelopment) && (
+      {(demoMode || localDevelopment || (standaloneMode && !hasApiKey)) && (
         <div className="development-banner">
           <span className="status-dot" />
           <strong>
-            {demoMode ? "Scripted UI preview" : "Local development"}
+            {demoMode
+              ? "Scripted UI preview"
+              : standaloneMode
+                ? "Standalone Gemini AI mode"
+                : "Local development"}
           </strong>
           <span>
             {demoMode
               ? "No live AI or clinical grading."
-              : "Unreviewed fictional cases · for development testing."}
+              : standaloneMode
+                ? "Running scenario fallback until you connect your free Google Gemini API key."
+                : "Unreviewed fictional cases · for development testing."}
           </span>
+          {standaloneMode && (
+            <button
+              type="button"
+              className="text-button"
+              style={{ fontSize: "11px", textDecoration: "underline" }}
+              onClick={() => setKeyModalOpen(true)}
+            >
+              Set API Key →
+            </button>
+          )}
         </div>
       )}
       <div className="main-shell">
@@ -106,6 +179,12 @@ export default function Layout() {
           </Link>
         </footer>
       </div>
+      {standaloneMode && (
+        <GeminiKeyModal
+          isOpen={keyModalOpen}
+          onClose={() => setKeyModalOpen(false)}
+        />
+      )}
     </div>
   );
 }

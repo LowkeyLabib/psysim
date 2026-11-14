@@ -2,6 +2,9 @@ import type { PsySimApi } from "../../shared/contracts";
 import { apiBase, demoMode, localDevelopment } from "./config";
 import { supabase } from "./supabase";
 import { demoApi } from "./demo";
+import { liveSimulationApi } from "./liveSimulation";
+
+const standaloneMode = !demoMode && !localDevelopment && !supabase;
 
 export class ApiError extends Error {
   constructor(
@@ -122,7 +125,11 @@ export const liveApi: PsySimApi = {
 
 export const liveServerApi = liveApi;
 
-export const api: PsySimApi = demoMode ? demoApi : liveApi;
+export const api: PsySimApi = demoMode
+  ? demoApi
+  : standaloneMode
+    ? liveSimulationApi
+    : liveApi;
 
 export async function localSignIn(): Promise<void> {
   if (!localDevelopment) throw new ApiError("Local sign-in is disabled.", 403);
