@@ -1,4 +1,4 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { GoogleGenerativeAI, HarmBlockThreshold, HarmCategory } from '@google/generative-ai';
 
 const STORAGE_KEY = 'psysim_gemini_api_key';
 const STORAGE_MODEL_KEY = 'psysim_gemini_model';
@@ -10,6 +10,25 @@ export const FALLBACK_GEMINI_MODELS = [
   'gemini-2.0-flash',
   'gemini-flash-latest',
 ] as const;
+
+export const CLINICAL_SAFETY_SETTINGS = [
+  {
+    category: HarmCategory.HARM_CATEGORY_HARASSMENT,
+    threshold: HarmBlockThreshold.BLOCK_NONE,
+  },
+  {
+    category: HarmCategory.HARM_CATEGORY_HATE_SPEECH,
+    threshold: HarmBlockThreshold.BLOCK_NONE,
+  },
+  {
+    category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
+    threshold: HarmBlockThreshold.BLOCK_NONE,
+  },
+  {
+    category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
+    threshold: HarmBlockThreshold.BLOCK_NONE,
+  },
+];
 
 export function getGeminiApiKey(): string {
   try {
@@ -64,6 +83,13 @@ export function setGeminiModel(model: string): void {
   }
 }
 
+export function maskGeminiApiKey(key: string): string {
+  const trimmed = key.trim();
+  if (!trimmed) return '';
+  if (trimmed.length <= 10) return '••••••••';
+  return `${trimmed.slice(0, 6)}••••••••${trimmed.slice(-4)}`;
+}
+
 function isAuthOrLeakedError(msg: string): { isFatal: boolean; error?: string } {
   const lower = msg.toLowerCase();
   if (lower.includes('leaked')) {
@@ -96,14 +122,15 @@ function isRetryableModelError(msg: string): boolean {
     lower.includes('not found') ||
     lower.includes('not supported') ||
     lower.includes('429') ||
+    lower.includes('503') ||
     lower.includes('quota') ||
-    lower.includes('resource_exhausted')
+    lower.includes('resource_exhausted') ||
+    lower.includes('overloaded')
   );
 }
 
 function formatConnectionError(msg: string): string {
   const cleaned = msg.replace(/\s+/g, ' ').trim();
-  // Strip verbose SDK prefix/URL if a clearer trailing reason exists, while keeping full context otherwise
   const statusMatch = cleaned.match(/\[(\d{3}[^\]]*)\]\s*(.+)$/);
   if (statusMatch) {
     return `Connection failed (${statusMatch[1]}): ${statusMatch[2]}`;
@@ -131,9 +158,6 @@ export async function discoverAvailableGeminiModels(apiKey: string): Promise<str
       }
     } catch {
       // keep HTTP status fallback
-    }
-    if (response.status === 400 || response.status === 401 || response.status === 403) {
-      throw new Error(detail);
     }
     throw new Error(detail);
   }
@@ -172,27 +196,35 @@ export async function validateGeminiApiKey(
   }
 
   let candidates: string[] = [];
+  let modelsEndpointAuthenticated = false;
   try {
     candidates = await discoverAvailableGeminiModels(trimmed);
+    if (candidates.length > 0) {
+      modelsEndpointAuthenticated = true;
+    }
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     const authCheck = isAuthOrLeakedError(msg);
     if (authCheck.isFatal) {
       return { valid: false, error: authCheck.error };
     }
-    // Non-auth network/list issue: fall back to curated list
     candidates = [...FALLBACK_GEMINI_MODELS];
   }
 
-  // Deduplicate while keeping prioritized discovered models first, then fallbacks
   const candidateList = Array.from(new Set([...candidates, ...FALLBACK_GEMINI_MODELS]));
   const genAI = new GoogleGenerativeAI(trimmed);
   let lastErrorMsg = 'Unable to connect to any Gemini model.';
 
   for (const candidate of candidateList) {
     try {
-      const model = genAI.getGenerativeModel({ model: candidate });
-      const result = await model.generateContent('Say "OK" in one word.');
+      const model = genAI.getGenerativeModel({
+        model: candidate,
+        safetySettings: CLINICAL_SAFETY_SETTINGS,
+        generationConfig: {
+          maxOutputTokens: 256,
+        },
+      });
+      const result = await model.generateContent('Reply with the single word OK.');
       const text = result.response.text();
       if (text) {
         setGeminiModel(candidate);
@@ -209,8 +241,15 @@ export async function validateGeminiApiKey(
       if (isRetryableModelError(msg)) {
         continue;
       }
-      return { valid: false, error: formatConnectionError(msg) };
     }
+  }
+
+  // If Google's /v1beta/models endpoint already authenticated the key and returned valid models,
+  // accept the key and set the top discovered model even if a test ping hit a transient rate limit.
+  if (modelsEndpointAuthenticated && candidates.length > 0) {
+    const bestModel = candidates[0];
+    setGeminiModel(bestModel);
+    return { valid: true, model: bestModel };
   }
 
   return { valid: false, error: formatConnectionError(lastErrorMsg) };
