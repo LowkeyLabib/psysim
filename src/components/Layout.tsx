@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link, NavLink, Outlet, useNavigate } from "react-router-dom";
+import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { Menu, X, LogOut, ArrowUpRight, KeyRound, Sparkles } from "lucide-react";
 import { useAuth } from "../lib/auth";
 import { demoMode, localDevelopment } from "../lib/config";
@@ -23,6 +23,7 @@ export function Logo() {
 export default function Layout() {
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
+  const { pathname } = useLocation();
   const [open, setOpen] = useState(false);
   const [error, setError] = useState("");
   const [keyModalOpen, setKeyModalOpen] = useState(false);
@@ -64,6 +65,7 @@ export default function Layout() {
           <NavLink to="/new">Practice room</NavLink>
           <NavLink to="/history">History</NavLink>
           <NavLink to="/guide">Interview guide</NavLink>
+          <NavLink to="/about">About</NavLink>
           {(demoMode ||
             user?.role === "supervisor" ||
             user?.role === "administrator") && (
@@ -173,7 +175,9 @@ export default function Layout() {
         </main>
         <footer>
           <Logo />
-          <span>Psychiatric education, one conversation at a time.</span>
+          {pathname !== "/about" && (
+            <span>Psychiatric education, one conversation at a time.</span>
+          )}
           <Link to="/guide">
             Text only · Fictional patients <ArrowUpRight size={14} />
           </Link>

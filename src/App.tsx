@@ -25,6 +25,7 @@ const Consultation = lazy(() => import("./pages/Consultation"));
 const Results = lazy(() => import("./pages/Results"));
 const Supervisor = lazy(() => import("./pages/Supervisor"));
 const Guide = lazy(() => import("./pages/Guide"));
+const About = lazy(() => import("./pages/About"));
 function Protected() {
   const { user, loading } = useAuth();
   if (loading) return <Loading />;
@@ -90,6 +91,7 @@ export default function App() {
                   <Route path="sessions/:id/results" element={<Results />} />
                   <Route path="supervisor" element={<Supervisor />} />
                   <Route path="guide" element={<Guide />} />
+                  <Route path="about" element={<About />} />
                   <Route
                     path="*"
                     element={

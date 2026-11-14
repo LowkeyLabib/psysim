@@ -2384,3 +2384,194 @@ progress::-moz-progress-bar {
     transform: none;
   }
 }
+
+/* ZeroGhee: editorial studio page, scoped to the About route. */
+.studio-about {
+  max-width: 1060px;
+  margin: 0 auto;
+}
+.studio-hero {
+  padding: 38px 0 60px;
+}
+.studio-identity {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  margin-bottom: 50px;
+}
+.studio-monogram {
+  display: grid;
+  place-items: center;
+  width: 66px;
+  height: 66px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  color: var(--sand);
+  font-size: 25px;
+  font-weight: 500;
+  letter-spacing: -2px;
+}
+.studio-identity .eyebrow {
+  margin-bottom: 3px;
+  font-size: 9px;
+  letter-spacing: 2px;
+}
+.studio-brand {
+  font-size: 26px;
+  letter-spacing: -0.8px;
+}
+.studio-hero h1 {
+  font-size: clamp(54px, 7.6vw, 96px);
+  line-height: 1.02;
+  letter-spacing: -4px;
+  margin-bottom: 30px;
+}
+.studio-hero h1 em {
+  letter-spacing: -3px;
+}
+.studio-description {
+  max-width: 540px;
+  font-size: 16px;
+  line-height: 1.9;
+  margin: 0;
+}
+.studio-developers {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 24px;
+}
+.studio-card {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: 34px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(216, 203, 179, 0.025);
+  transition: border-color 180ms ease, transform 180ms ease;
+}
+.studio-card:hover,
+.studio-card:focus-within {
+  border-color: rgba(216, 203, 179, 0.4);
+}
+.studio-card:hover {
+  transform: translateY(-3px);
+}
+.studio-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 36px;
+}
+.studio-avatar {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font-size: 12px;
+  letter-spacing: 1px;
+}
+.studio-role {
+  color: var(--muted);
+  font-size: 9px;
+  letter-spacing: 1.8px;
+}
+.studio-card h2 {
+  /* Electric blue meets large-text contrast here; keep handles at least 28px. */
+  color: var(--blue);
+  font-size: clamp(28px, 3vw, 38px);
+  font-weight: 500;
+  letter-spacing: -1px;
+  margin-bottom: 10px;
+}
+.studio-name {
+  color: var(--sand);
+  font-size: 21px;
+  line-height: 1.4;
+  margin-bottom: 18px;
+}
+.studio-contributions {
+  font-size: 13px;
+  margin-bottom: 34px;
+}
+.studio-contacts {
+  flex: 1;
+  padding-top: 22px;
+  border-top: 1px solid var(--line);
+  min-height: 110px;
+}
+.studio-email {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  color: var(--sand);
+  font-size: 13px;
+}
+.studio-email span {
+  overflow-wrap: anywhere;
+}
+.studio-email > svg:last-child {
+  margin-left: auto;
+}
+.studio-email:hover span,
+.studio-socials a:hover {
+  text-decoration: underline;
+  text-underline-offset: 5px;
+}
+.studio-socials {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 24px;
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.studio-socials a {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  font-size: 12px;
+}
+.studio-work {
+  display: grid;
+  grid-template-columns: 1fr 1.3fr;
+  gap: 32px;
+  border-top: 1px solid var(--line);
+  padding-top: 38px;
+  margin-top: 56px;
+}
+.studio-work h2 {
+  font-size: 25px;
+  line-height: 1.4;
+  margin: 0;
+}
+.studio-work p {
+  font-size: 14px;
+  line-height: 1.9;
+  margin: 0;
+}
+@media (max-width: 800px) {
+  .studio-hero { padding-top: 20px; }
+  .studio-card { padding: 26px; }
+  .studio-email { font-size: 12px; }
+}
+@media (max-width: 640px) {
+  .studio-identity { margin-bottom: 36px; }
+  .studio-hero { padding-bottom: 38px; }
+  .studio-hero h1 { letter-spacing: -2.3px; }
+  .studio-hero h1 em { letter-spacing: -2px; }
+  .studio-description { font-size: 14px; }
+  .studio-developers { grid-template-columns: 1fr; gap: 18px; }
+  .studio-card { padding: 28px; }
+  .studio-card h2 { font-size: 34px; }
+  .studio-email { font-size: 13px; }
+  .studio-work { grid-template-columns: 1fr; gap: 16px; margin-top: 38px; padding-top: 28px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .studio-card:hover { transform: none; }
+}
