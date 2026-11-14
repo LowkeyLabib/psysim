@@ -17,12 +17,24 @@ export const CLINICAL_SAFETY_SETTINGS = [
   { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' },
 ];
 
+export function getGeminiProxyUrl(): string {
+  try {
+    return (import.meta.env.VITE_GEMINI_PROXY_URL || '').trim().replace(/\/$/, '');
+  } catch {
+    return '';
+  }
+}
+
 export function getGeminiApiKey(): string {
   try {
     return localStorage.getItem(STORAGE_KEY) || '';
   } catch {
     return '';
   }
+}
+
+export function hasLiveAiAccess(): boolean {
+  return Boolean(getGeminiApiKey() || getGeminiProxyUrl());
 }
 
 export function setGeminiApiKey(key: string): void {
@@ -192,9 +204,46 @@ export async function callGeminiGenerateContent(params: {
   temperature?: number;
   maxOutputTokens?: number;
 }): Promise<string> {
+  const trimmedKey = params.apiKey.trim();
+  const proxyUrl = getGeminiProxyUrl();
+
+  if (!trimmedKey && proxyUrl) {
+    const response = await fetch(`${proxyUrl}/generate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: params.model,
+        systemInstruction: params.systemInstruction,
+        contents: params.contents,
+        temperature: params.temperature ?? 0.7,
+        maxOutputTokens: params.maxOutputTokens ?? 2048,
+      }),
+    });
+
+    const payload = (await response.json().catch(() => null)) as {
+      text?: string;
+      model?: string;
+      error?: { message?: string };
+    } | null;
+
+    if (!response.ok) {
+      const errMsg = payload?.error?.message || `${response.status} ${response.statusText}`.trim();
+      throw new Error(`[${response.status}] ${errMsg}`);
+    }
+
+    const text = (payload?.text || '').trim();
+    if (!text) {
+      throw new Error(`Empty response received from proxy (${params.model}).`);
+    }
+    if (payload?.model) {
+      setGeminiModel(payload.model);
+    }
+    return text;
+  }
+
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(
     params.model,
-  )}:generateContent?key=${encodeURIComponent(params.apiKey.trim())}`;
+  )}:generateContent?key=${encodeURIComponent(trimmedKey)}`;
 
   const body: Record<string, unknown> = {
     contents: params.contents,

@@ -8,7 +8,7 @@ import {
 import type { UserProfile } from "../../shared/contracts";
 import { api, ApiError, localSignIn, localSignOut } from "./api";
 import { demoMode, setupMissing, localDevelopment } from "./config";
-import { getGeminiApiKey } from "./geminiKey";
+import { getGeminiApiKey, hasLiveAiAccess } from "./geminiKey";
 import { supabase } from "./supabase";
 import { errorMessage } from "./session";
 
@@ -60,7 +60,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         } else if (standaloneMode) {
           const pref = localStorage.getItem(STANDALONE_ACTIVE_KEY);
           const isSignedIn =
-            pref === "true" || (pref === null && Boolean(getGeminiApiKey()));
+            pref === "true" ||
+            (pref === null && (Boolean(getGeminiApiKey()) || hasLiveAiAccess()));
           if (isSignedIn) {
             const profile = await api.me();
             if (active && current === generation) setUser(profile);

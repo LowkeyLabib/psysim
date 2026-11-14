@@ -3,7 +3,7 @@ import { Link, NavLink, Outlet, useNavigate } from "react-router-dom";
 import { Menu, X, LogOut, ArrowUpRight, KeyRound, Sparkles } from "lucide-react";
 import { useAuth } from "../lib/auth";
 import { demoMode, localDevelopment } from "../lib/config";
-import { getGeminiApiKey } from "../lib/geminiKey";
+import { hasLiveAiAccess } from "../lib/geminiKey";
 import { supabase } from "../lib/supabase";
 import { errorMessage } from "../lib/session";
 import { GeminiKeyModal } from "./GeminiKeyModal";
@@ -26,10 +26,10 @@ export default function Layout() {
   const [open, setOpen] = useState(false);
   const [error, setError] = useState("");
   const [keyModalOpen, setKeyModalOpen] = useState(false);
-  const [hasApiKey, setHasApiKey] = useState(() => Boolean(getGeminiApiKey()));
+  const [hasApiKey, setHasApiKey] = useState(() => hasLiveAiAccess());
 
   useEffect(() => {
-    const syncKey = () => setHasApiKey(Boolean(getGeminiApiKey()));
+    const syncKey = () => setHasApiKey(hasLiveAiAccess());
     window.addEventListener("psysim_api_key_changed", syncKey);
     return () => window.removeEventListener("psysim_api_key_changed", syncKey);
   }, []);

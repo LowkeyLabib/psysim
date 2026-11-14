@@ -3,7 +3,11 @@ import { Navigate } from "react-router-dom";
 import { ArrowRight, KeyRound, LockKeyhole, Sparkles } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import { setupMissing, localDevelopment, demoMode } from "../lib/config";
-import { getGeminiApiKey, maskGeminiApiKey } from "../lib/geminiKey";
+import {
+  getGeminiApiKey,
+  getGeminiProxyUrl,
+  maskGeminiApiKey,
+} from "../lib/geminiKey";
 
 const standaloneMode = !demoMode && !localDevelopment && !supabase;
 import { useAuth } from "../lib/auth";
@@ -27,6 +31,7 @@ export default function Auth() {
   const [notice, setNotice] = useState("");
   const [keyModalOpen, setKeyModalOpen] = useState(false);
   const [savedKey, setSavedKey] = useState(() => getGeminiApiKey());
+  const proxyConfigured = Boolean(getGeminiProxyUrl());
 
   if (loading) return <Loading />;
   if (user) return <Navigate to="/" replace />;
@@ -130,12 +135,20 @@ export default function Auth() {
             </div>
           ) : standaloneMode ? (
             <div className="setup-panel">
-              <span className="badge sage">STANDALONE LIVE AI</span>
-              <h3>Connect Gemini AI &amp; Practice</h3>
+              <span className="badge sage">
+                {proxyConfigured ? "LIVE GEMINI AI READY" : "STANDALONE LIVE AI"}
+              </span>
+              <h3>
+                {proxyConfigured
+                  ? "Enter Clinical Practice"
+                  : "Connect Gemini AI & Practice"}
+              </h3>
               <p>
                 {savedKey
-                  ? `Gemini API key (${maskGeminiApiKey(savedKey)}) is connected. Enter your clinical workspace to interview live AI psychiatric patients.`
-                  : "Enter your free Google Gemini API key to interview live AI psychiatric patients in English, বাংলা, or Banglish directly in your browser."}
+                  ? `Personal Gemini API key (${maskGeminiApiKey(savedKey)}) is connected. Enter your clinical workspace to interview live AI psychiatric patients.`
+                  : proxyConfigured
+                    ? "Live AI psychiatric patient simulation is ready in English, বাংলা, and Banglish. No API key setup required."
+                    : "Enter your free Google Gemini API key to interview live AI psychiatric patients in English, বাংলা, or Banglish directly in your browser."}
               </p>
               {(error || profileError) && (
                 <ErrorNotice message={error || profileError} />

@@ -15,6 +15,7 @@ import {
   FALLBACK_GEMINI_MODELS,
   getGeminiApiKey,
   getGeminiModel,
+  hasLiveAiAccess,
   setGeminiModel,
   type GeminiContentTurn,
 } from './geminiKey';
@@ -767,7 +768,7 @@ export const liveSimulationApi: PsySimApi = {
 
     const now = new Date().toISOString();
     const openText = scenario.openingMessages[input.language] || scenario.openingMessages.en;
-    const apiKey = getGeminiApiKey();
+    const liveAvailable = hasLiveAiAccess();
 
     const newSession: PublicSession = {
       id: sessionId,
@@ -805,7 +806,7 @@ export const liveSimulationApi: PsySimApi = {
           guidance: o.guidance,
         })),
       },
-      simulation: apiKey ? 'live' : 'mock',
+      simulation: liveAvailable ? 'live' : 'mock',
     };
 
     const all = loadSessions();
@@ -819,7 +820,7 @@ export const liveSimulationApi: PsySimApi = {
     const list = loadSessions();
     const found = list.find((s) => s.id === id);
     if (!found) throw new Error('Session not found.');
-    if (getGeminiApiKey() && found.simulation !== 'live') {
+    if (hasLiveAiAccess() && found.simulation !== 'live') {
       found.simulation = 'live';
       saveSessions(list);
     }
@@ -840,6 +841,7 @@ export const liveSimulationApi: PsySimApi = {
 
     const scenario = resolveScenarioForSession(id, session.patient.name);
     const apiKey = getGeminiApiKey();
+    const liveAvailable = hasLiveAiAccess();
 
     const stuMsg: Message = {
       id: `msg_stu_${Date.now()}`,
@@ -851,7 +853,7 @@ export const liveSimulationApi: PsySimApi = {
 
     let patientContent = '';
     let aiMatchedObjectives: string[] = [];
-    if (apiKey) {
+    if (liveAvailable) {
       try {
         const turn = await generateGeminiPatientTurn(
           scenario,
