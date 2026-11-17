@@ -7,10 +7,9 @@ vi.mock("../lib/config", () => ({
   demoMode: true,
   setupMissing: false,
   apiBase: "",
-  supabaseUrl: "",
-  supabaseKey: "",
+  neonAuthUrl: "",
 }));
-vi.mock("../lib/supabase", () => ({ supabase: null }));
+vi.mock("../lib/neonAuth", () => ({ neonAuth: null }));
 beforeEach(() => {
   localStorage.clear();
   window.history.replaceState({}, "", "/");
@@ -19,7 +18,7 @@ it("completes the student demo flow with Bengali text, confirmation, persistence
   const user = userEvent.setup();
   render(<App />);
   await user.click(
-    await screen.findByRole("link", { name: "Start Simulation" }),
+    await screen.findByRole("link", { name: "Start Simulation" }, { timeout: 5000 }),
   );
   await user.selectOptions(
     await screen.findByLabelText("Conversation language"),

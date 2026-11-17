@@ -27,12 +27,13 @@ jobs:
       - run: npm run build
         env:
           VITE_DEMO_MODE: "false"
+          VITE_NEON_AUTH_URL: ${{ vars.PSYSIM_NEON_AUTH_URL }}
           VITE_GEMINI_PROXY_URL: ${{ vars.PSYSIM_GEMINI_PROXY_URL }}
           VITE_API_BASE_URL: ${{ vars.PSYSIM_API_BASE_URL }}
-          VITE_SUPABASE_URL: ${{ vars.PSYSIM_SUPABASE_URL }}
-          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ vars.PSYSIM_SUPABASE_PUBLISHABLE_KEY }}
       - run: cp dist/index.html dist/404.html && touch dist/.nojekyll
+      # Keep the existing live site until the account backend is configured.
       - uses: peaceiris/actions-gh-pages@v4
+        if: ${{ vars.PSYSIM_NEON_AUTH_URL != '' && vars.PSYSIM_API_BASE_URL != '' }}
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./dist

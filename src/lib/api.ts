@@ -1,10 +1,17 @@
 import type { PsySimApi } from "../../shared/contracts";
 import { apiBase, demoMode, localDevelopment } from "./config";
-import { supabase } from "./supabase";
+import { neonAuth } from "./neonAuth";
 import { demoApi } from "./demo";
-import { liveSimulationApi } from "./liveSimulation";
+// Legacy browser simulation is available only in development; hidden cases must
+// never ship in an authenticated production bundle.
+const standaloneApi = import.meta.env.DEV ? new Proxy({} as PsySimApi, {
+  get: (_target, method: keyof PsySimApi) => async (...args: unknown[]) => {
+    const { liveSimulationApi } = await import("./liveSimulation");
+    return (liveSimulationApi[method] as (...args: unknown[]) => unknown)(...args);
+  },
+}) : null;
 
-const standaloneMode = !demoMode && !localDevelopment && !supabase;
+const standaloneMode = import.meta.env.DEV && !demoMode && !localDevelopment && !neonAuth;
 
 export class ApiError extends Error {
   constructor(
@@ -22,15 +29,11 @@ export async function request<T>(
   body?: unknown,
   key?: string,
 ): Promise<T> {
-  const { data } = supabase
-    ? await supabase.auth.getSession()
-    : { data: { session: null } };
-  if (!data?.session && !localDevelopment) {
-    throw new ApiError(
-      "Your session has expired. Please sign in again.",
-      401,
-      "UNAUTHENTICATED",
-    );
+  const tokenResponse = await neonAuth?.$fetch<{ token: string }>("/token");
+  const token = tokenResponse?.data?.token;
+  if (!token && !localDevelopment) {
+    window.dispatchEvent(new Event("psysim:unauthenticated"));
+    throw new ApiError("Your session has expired. Please sign in again.", 401, "UNAUTHENTICATED");
   }
 
   const controller = new AbortController();
@@ -38,8 +41,8 @@ export async function request<T>(
 
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
-    ...(data?.session
-      ? { Authorization: `Bearer ${data.session.access_token}` }
+    ...(token
+      ? { Authorization: `Bearer ${token}` }
       : {}),
     ...(key ? { "Idempotency-Key": key } : {}),
   };
@@ -56,6 +59,7 @@ export async function request<T>(
     const payload = await response.json().catch(() => null);
 
     if (!response.ok) {
+      if (response.status === 401) window.dispatchEvent(new Event("psysim:unauthenticated"));
       throw new ApiError(
         payload?.error?.message || `Request failed (${response.status}).`,
         response.status,
@@ -128,7 +132,7 @@ export const liveServerApi = liveApi;
 export const api: PsySimApi = demoMode
   ? demoApi
   : standaloneMode
-    ? liveSimulationApi
+    ? standaloneApi!
     : liveApi;
 
 export async function localSignIn(): Promise<void> {

@@ -29,7 +29,7 @@ const About = lazy(() => import("./pages/About"));
 function Protected() {
   const { user, loading } = useAuth();
   if (loading) return <Loading />;
-  return user ? <Layout /> : <Navigate to="/auth" replace />;
+  return user ? <Layout key={user.id} /> : <Navigate to="/auth" replace />;
 }
 function NavigationFocus() {
   const location = useLocation();

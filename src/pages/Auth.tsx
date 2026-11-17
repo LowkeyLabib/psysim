@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { Navigate } from "react-router-dom";
 import { ArrowRight, KeyRound, LockKeyhole, Sparkles } from "lucide-react";
-import { supabase } from "../lib/supabase";
+import { neonAuth } from "../lib/neonAuth";
 import { setupMissing, localDevelopment, demoMode } from "../lib/config";
 import {
   getGeminiApiKey,
@@ -9,7 +9,7 @@ import {
   maskGeminiApiKey,
 } from "../lib/geminiKey";
 
-const standaloneMode = !demoMode && !localDevelopment && !supabase;
+const standaloneMode = import.meta.env.DEV && !demoMode && !localDevelopment && !neonAuth;
 import { useAuth } from "../lib/auth";
 import { errorMessage } from "../lib/session";
 import { Logo } from "../components/Layout";
@@ -26,6 +26,7 @@ export default function Auth() {
     enterStandalone,
   } = useAuth();
   const [signup, setSignup] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -38,7 +39,7 @@ export default function Auth() {
 
   async function submit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    if (!supabase || busy) return;
+    if (!neonAuth || busy) return;
     setBusy(true);
     setError("");
     setNotice("");
@@ -48,23 +49,28 @@ export default function Auth() {
       password: String(data.get("password")),
     };
     try {
+      if (signup && credentials.password !== String(data.get("confirmPassword"))) {
+        setError("Passwords do not match.");
+        return;
+      }
+      const callbackURL = new URL("auth", new URL(import.meta.env.BASE_URL, window.location.href)).href;
       const response = signup
-        ? await supabase.auth.signUp({
-            ...credentials,
-            options: {
-              data: { display_name: String(data.get("name")) },
-              emailRedirectTo: `${window.location.origin}/auth`,
-            },
-          })
-        : await supabase.auth.signInWithPassword(credentials);
-      if (response.error) throw response.error;
-      if (signup && !response.data.session) {
+        ? await neonAuth.signUp.email({ ...credentials, name: String(data.get("name")).trim(), callbackURL })
+        : await neonAuth.signIn.email({ ...credentials, callbackURL });
+      if (response.error) {
+        setError(signup
+          ? "Unable to create the account. Check your details, or sign in if you already registered."
+          : "Unable to sign in. Check your email and password, and confirm your email if required.");
+        return;
+      }
+      const session = await neonAuth.getSession();
+      if (!session.data?.session) {
         setNotice("Check your email to confirm your account, then sign in.");
       } else {
         refresh();
       }
-    } catch (e) {
-      setError(errorMessage(e));
+    } catch {
+      setError("Account service unavailable. Please try again shortly.");
     } finally {
       setBusy(false);
     }
@@ -230,12 +236,22 @@ export default function Auth() {
                 Password
                 <input
                   name="password"
-                  type="password"
+                  type={showPassword ? "text" : "password"}
                   autoComplete={signup ? "new-password" : "current-password"}
                   minLength={signup ? 8 : 1}
                   required
                 />
               </label>
+              {signup && (
+                <label>Confirm password
+                  <input name="confirmPassword" type={showPassword ? "text" : "password"}
+                    autoComplete="new-password" minLength={8} required />
+                </label>
+              )}
+              <button type="button" className="text-button" aria-pressed={showPassword}
+                onClick={() => setShowPassword(v => !v)}>
+                {showPassword ? "Hide passwords" : "Show passwords"}
+              </button>
               {(error || profileError) && (
                 <ErrorNotice
                   message={error || profileError}

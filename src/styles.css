@@ -2575,3 +2575,6 @@ progress::-moz-progress-bar {
 @media (prefers-reduced-motion: reduce) {
   .studio-card:hover { transform: none; }
 }
+
+.studio-official-logo { width: 160px; height: 160px; object-fit: contain; flex-shrink: 0; border-radius: 12px; background: #000; }
+@media (max-width: 640px) { .studio-official-logo { width: 112px; height: 112px; } }

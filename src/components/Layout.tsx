@@ -4,12 +4,12 @@ import { Menu, X, LogOut, ArrowUpRight, KeyRound, Sparkles } from "lucide-react"
 import { useAuth } from "../lib/auth";
 import { demoMode, localDevelopment } from "../lib/config";
 import { hasLiveAiAccess } from "../lib/geminiKey";
-import { supabase } from "../lib/supabase";
+import { neonAuth } from "../lib/neonAuth";
 import { errorMessage } from "../lib/session";
 import { GeminiKeyModal } from "./GeminiKeyModal";
 import { ErrorNotice } from "./ui";
 
-const standaloneMode = !demoMode && !localDevelopment && !supabase;
+const standaloneMode = import.meta.env.DEV && !demoMode && !localDevelopment && !neonAuth;
 export function Logo() {
   return (
     <Link className="logo" to="/" aria-label="PsySim home">

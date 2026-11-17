@@ -1,5 +1,6 @@
 import {
   createContext,
+  useCallback,
   useContext,
   useEffect,
   useState,
@@ -9,11 +10,11 @@ import type { UserProfile } from "../../shared/contracts";
 import { api, ApiError, localSignIn, localSignOut } from "./api";
 import { demoMode, setupMissing, localDevelopment } from "./config";
 import { getGeminiApiKey, hasLiveAiAccess } from "./geminiKey";
-import { supabase } from "./supabase";
+import { neonAuth } from "./neonAuth";
 import { errorMessage } from "./session";
 
 const STANDALONE_ACTIVE_KEY = "psysim_standalone_active";
-const standaloneMode = !demoMode && !localDevelopment && !supabase;
+const standaloneMode = import.meta.env.DEV && !demoMode && !localDevelopment && !neonAuth;
 
 interface AuthValue {
   user: UserProfile | null;
@@ -32,6 +33,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [revision, setRevision] = useState(0);
+  const refresh = useCallback(() => setRevision(v => v + 1), []);
 
   useEffect(() => {
     let active = true;
@@ -44,10 +46,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (demoMode) {
           const profile = await api.me();
           if (active && current === generation) setUser(profile);
-        } else if (!setupMissing && supabase) {
-          const { data, error: authError } = await supabase.auth.getSession();
+        } else if (!setupMissing && neonAuth) {
+          const { data, error: authError } = await neonAuth.getSession();
           if (authError) throw authError;
-          const profile = data.session ? await api.me() : null;
+          const profile = data?.session ? await api.me() : null;
           if (active && current === generation) setUser(profile);
         } else if (localDevelopment) {
           try {
@@ -79,14 +81,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     }
     void load();
-    const subscription = supabase?.auth.onAuthStateChange(() => {
-      setTimeout(() => {
-        if (active) void load();
-      }, 0);
-    });
+    const invalidate = () => { generation++; setUser(null); setLoading(false); };
+    const restore = () => { if (neonAuth) void load(); };
+    window.addEventListener("psysim:unauthenticated", invalidate);
+    window.addEventListener("focus", restore);
+
     return () => {
       active = false;
-      subscription?.data.subscription.unsubscribe();
+
+      window.removeEventListener("psysim:unauthenticated", invalidate);
+      window.removeEventListener("focus", restore);
     };
   }, [revision]);
 
@@ -105,8 +109,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signOut = async () => {
-    if (supabase) {
-      const { error } = await supabase.auth.signOut();
+    if (neonAuth) {
+      const { error } = await neonAuth.signOut();
       if (error) throw error;
     }
     if (localDevelopment) await localSignOut();
@@ -126,12 +130,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         user,
         loading,
         error,
-        refresh: () => setRevision((v) => v + 1),
+        refresh,
         signOut,
         enterLocal,
         enterStandalone,
       }}
     >
+      {neonAuth && <NeonSessionObserver onChange={refresh} />}
       {children}
     </Context.Provider>
   );
@@ -141,4 +146,11 @@ export function useAuth() {
   const value = useContext(Context);
   if (!value) throw new Error("AuthProvider is missing");
   return value;
+}
+
+function NeonSessionObserver({ onChange }: { onChange: () => void }) {
+  const { data, isPending } = neonAuth!.useSession();
+  const identity = data?.user.id;
+  useEffect(() => { if (!isPending) onChange(); }, [identity, isPending, onChange]);
+  return null;
 }

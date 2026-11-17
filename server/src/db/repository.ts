@@ -13,7 +13,7 @@ import {
 } from "../types";
 import { AppError } from "../middleware/AppError";
 type Receipt = { signature: string; session: PublicSession };
-type State = {
+export type State = {
   sessions: Record<string, PublicSession>;
   owners: Record<string, string>;
   profiles: Record<string, InternalClinicalProfile>;
@@ -42,7 +42,7 @@ export interface CreateData {
 export interface IRepository {
   createSession(data: CreateData): Promise<PublicSession>;
   getSession(id: string): Promise<PublicSession | null>;
-  owns(id: string, userId: string): boolean;
+  owns(id: string, userId: string): boolean | Promise<boolean>;
   updateSession(
     id: string,
     mutate: (s: PublicSession) => void,
@@ -52,7 +52,7 @@ export interface IRepository {
     expectedVersion: number,
     evaluation?: SessionResult,
     receipt?: { key: string; signature: string },
-  ): PublicSession;
+  ): PublicSession | Promise<PublicSession>;
   getUserSessions(userId: string): Promise<PublicSession[]>;
   getScenario(id: string): Promise<InternalClinicalProfile | null>;
   getScenarios(filter?: {
@@ -74,7 +74,7 @@ export interface IRepository {
     note: string,
     reviewerId?: string,
   ): Promise<ScenarioDraft | null>;
-  getIdempotencyReceipt(key: string, signature?: string): PublicSession | null;
+  getIdempotencyReceipt(key: string, signature?: string): PublicSession | null | Promise<PublicSession | null>;
   saveIdempotencyReceipt(
     key: string,
     s: PublicSession,
@@ -120,6 +120,8 @@ export class InMemoryRepository implements IRepository {
       };
     }
   }
+  snapshot() { return structuredClone(this.state); }
+  restore(state: State) { this.state = structuredClone(state); }
   protected persist() {}
   protected change<T>(action: () => T): T {
     const backup = structuredClone(this.state);

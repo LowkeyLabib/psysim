@@ -1,18 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-const mocks = vi.hoisted(() => ({ getSession: vi.fn() }));
+const mocks = vi.hoisted(() => ({ token: vi.fn() }));
 vi.mock("../lib/config", () => ({
   localDevelopment: false,
   demoMode: false,
   apiBase: "https://psysim.test/api",
 }));
-vi.mock("../lib/supabase", () => ({
-  supabase: { auth: { getSession: mocks.getSession } },
+vi.mock("../lib/neonAuth", () => ({
+  neonAuth: { $fetch: mocks.token },
 }));
 import { liveApi, request } from "../lib/api";
 beforeEach(() => {
-  mocks.getSession.mockResolvedValue({
-    data: { session: { access_token: "test-token" } },
-  });
+  mocks.token.mockResolvedValue({ data: { token: "test-token" } });
 });
 describe("authenticated API transport", () => {
   it("sends bearer, Unicode body, version, and idempotency key to the encoded endpoint", async () => {
@@ -38,7 +36,7 @@ describe("authenticated API transport", () => {
     });
   });
   it("blocks unauthenticated network access", async () => {
-    mocks.getSession.mockResolvedValue({ data: { session: null } });
+    mocks.token.mockResolvedValue(null);
     const fetch = vi.fn();
     vi.stubGlobal("fetch", fetch);
     await expect(liveApi.me()).rejects.toMatchObject({ status: 401 });

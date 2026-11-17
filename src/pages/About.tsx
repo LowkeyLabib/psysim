@@ -37,7 +37,7 @@ export default function About() {
     >
       <header className="studio-hero">
         <div className="studio-identity">
-          <span className="studio-monogram" aria-hidden="true">ZG</span>
+          <img className="studio-official-logo" src={`${import.meta.env.BASE_URL}zeroghee-logo.png`} alt="ZeroGhee official logo" width={160} height={160} />
           <div>
             <span className="eyebrow">INDEPENDENT DEV STUDIO</span>
             <span className="studio-brand">ZeroGhee</span>

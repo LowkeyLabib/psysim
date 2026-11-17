@@ -30,7 +30,7 @@ function receipt(req: Request, body: unknown) {
   };
 }
 async function own(req: Request): Promise<PublicSession> {
-  if (!repository.owns(req.params.id, req.user!.id))
+  if (!(await repository.owns(req.params.id, req.user!.id)))
     throw new AppError(404, "NOT_FOUND", "Session does not exist.");
   const s = await repository.getSession(req.params.id);
   if (!s) throw new AppError(404, "NOT_FOUND", "Session does not exist.");
@@ -49,7 +49,7 @@ sessionRoutes.post("/", async (req, res, next) => {
     const body = CreateSessionZod.parse(req.body),
       r = receipt(req, body);
     const s = await repository.exclusive(`create:${r.key}`, async () => {
-      const cached = repository.getIdempotencyReceipt(r.key, r.signature);
+      const cached = await repository.getIdempotencyReceipt(r.key, r.signature);
       if (cached) return cached;
       const candidates = await repository.getScenarios({
         categoryId: body.mode === "custom" ? body.categoryId : undefined,
@@ -108,7 +108,7 @@ sessionRoutes.post("/:id/messages", async (req, res, next) => {
       `session:${req.params.id}`,
       async () => {
         const session = await own(req);
-        const cached = repository.getIdempotencyReceipt(r.key, r.signature);
+        const cached = await repository.getIdempotencyReceipt(r.key, r.signature);
         if (cached) return cached;
         version(session, body.expectedVersion);
         if (!["IN_PROGRESS", "INTERVIEW_COMPLETE"].includes(session.state))
@@ -180,7 +180,7 @@ sessionRoutes.post("/:id/diagnosis", async (req, res, next) => {
       `session:${req.params.id}`,
       async () => {
         const session = await own(req);
-        const cached = repository.getIdempotencyReceipt(r.key, r.signature);
+        const cached = await repository.getIdempotencyReceipt(r.key, r.signature);
         if (cached) return cached;
         version(session, body.expectedVersion);
         if (session.state === "EVALUATED")

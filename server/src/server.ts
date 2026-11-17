@@ -11,6 +11,8 @@ import { supervisorRoutes } from "./routes/supervisorRoutes";
 import { repository, SqliteRepository, setRepository } from "./db/repository";
 import { SEED_SCENARIOS } from "./knowledge/seedScenarios";
 import { SessionSummary } from "./types";
+import { getNeonPool } from "./db/neonPostgres";
+import { createPostgresRepository } from "./db/postgresRepository";
 export const app = express();
 app.disable("x-powered-by");
 app.use(cors({ origin: config.corsOrigin, credentials: true }));
@@ -111,16 +113,11 @@ app.use((_req, _res, next) =>
 );
 app.use(errorHandler);
 if (config.nodeEnv !== "test") {
-  if (config.nodeEnv === "production" && !config.supabase.isConfigured)
-    throw new Error(
-      "Production requires Supabase authentication configuration.",
-    );
-  if (config.nodeEnv === "production" && !process.env.DATABASE_FILE)
-    throw new Error(
-      "Production requires DATABASE_FILE on a persistent volume and a single server process.",
-    );
-  const store = new SqliteRepository(config.databaseFile, SEED_SCENARIOS);
-  setRepository(store);
+  const pool = getNeonPool();
+  if (config.nodeEnv === "production" && (!config.neon.isAuthConfigured || !pool))
+    throw new Error("Production requires Neon Auth and DATABASE_URL configuration.");
+  const store = pool ? null : new SqliteRepository(config.databaseFile, SEED_SCENARIOS);
+  setRepository(pool ? createPostgresRepository(pool, SEED_SCENARIOS) : store!);
   const server = app.listen(config.port, config.host, () =>
     console.log(
       `[PsySim] Listening on ${config.host}:${config.port}; provider: ${config.aiProvider}`,
@@ -129,7 +126,8 @@ if (config.nodeEnv !== "test") {
   for (const signal of ["SIGINT", "SIGTERM"] as const)
     process.once(signal, () =>
       server.close(() => {
-        store.close();
+        store?.close();
+        void pool?.end();
         process.exit(0);
       }),
     );

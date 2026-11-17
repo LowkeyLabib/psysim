@@ -8,7 +8,5 @@ export const apiBase = (import.meta.env.VITE_API_BASE_URL || "/api").replace(
   /\/$/,
   "",
 );
-export const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || "";
-export const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || "";
-export const setupMissing =
-  !demoMode && !localDevelopment && (!supabaseUrl || !supabaseKey);
+export const neonAuthUrl = import.meta.env.VITE_NEON_AUTH_URL || "";
+export const setupMissing = !demoMode && !localDevelopment && !neonAuthUrl;

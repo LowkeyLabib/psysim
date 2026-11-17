@@ -11,8 +11,13 @@ import { simulationEngine } from "../src/routes/sessionRoutes";
 import { config } from "../src/config";
 import { AppError } from "../src/middleware/AppError";
 const auth = vi.hoisted(() => ({ getUser: vi.fn() }));
-vi.mock("../src/db/supabase", () => ({
-  getSupabase: () => ({ auth: { getUser: auth.getUser } }),
+vi.mock("../src/auth/neon", () => ({
+  verifyNeonIdentity: async (token: string) => {
+    const { data } = await auth.getUser(token);
+    if (!data?.user) throw new AppError(401, "UNAUTHENTICATED", "Please sign in again.");
+    const u = data.user;
+    return { id: u.id, email: u.email || "", displayName: "Learner", role: u.app_metadata?.role || "student" };
+  },
 }));
 let cookie: string;
 const chat = vi.fn(),

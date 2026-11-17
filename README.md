@@ -6,7 +6,7 @@ Text-only psychiatric interview practice with fictional patients, built with Rea
 
 Faiaz's work through `24dfb65` is integrated into `dev-frontend`, preserving both Git histories and the alternate `client/` source. The root `src/` application is the supported frontend. Live AI, persistent local sessions, evidence-based interview gates, diagnosis evaluation and feedback work through the Express API. No provider keys or hidden case profiles are sent to the browser.
 
-**This is a development release, not a clinically validated teaching deployment.** The seven imported cases and their three interview-style variants are labeled unreviewed development material. They are excluded from production selection. No Supabase or hosting project is provisioned. Nothing is deployed by pushing this branch; the Pages workflow is manual only.
+**This is a development release, not a clinically validated teaching deployment.** The seven imported cases and their three interview-style variants are labeled unreviewed development material. They are excluded from production selection. The shared Neon project is `psysim` in Faiaz’s organization. Account setup and verification are documented in [Neon accounts](docs/NEON_ACCOUNTS.md). GitHub Pages publishing is gated on the Auth and backend API URL variables; a Git push alone does not configure the backend or database.
 
 ## Local setup
 
@@ -62,10 +62,10 @@ The configured model is `gemini-3.5-flash-lite`, verified with real generation a
 
 ## Before hosting
 
-- Connect the institution's Supabase Auth project. Verify real sign-up, email confirmation, sign-in, expiration and sign-out. Roles must be assigned through trusted `app_metadata`, never student-editable metadata or profile rows.
+- Configure the existing Neon Auth branch and apply the additive Neon migration. Verify real signup, optional email confirmation, login, expiration and logout. Assign privileged roles only through the server-managed account table, never user metadata.
 - Have qualified reviewers author and approve clinical cases, accepted terminology, objective criteria and source references. The original source registry is only a list of candidates; its content was not ingested or licensed by this integration.
 - Run the current SQLite repository with **one backend process on a persistent volume**, backups and a suitable access/retention policy. It is not a multi-instance or ephemeral-serverless repository. Choose and implement a production database adapter before using those hosting models.
-- The imported `server/migrations/001_initial_schema.sql` is preserved for review, **not applied or used** by the current repository. It contains permissive legacy policies and is not safe to apply as a production setup. A future Supabase adapter must use reviewed, backward-compatible hardening migrations and tests.
+- The imported `server/migrations/001_initial_schema.sql` is preserved for review, **not applied or used** by the current repository. It contains permissive legacy policies and is not safe to apply as a production setup. Use `001_neon_accounts.sql` for the new Neon adapter; keep the historical SQL untouched.
 - Configure public frontend build variables and private server variables separately. Use HTTPS, the exact frontend CORS origin, disable development flags, and configure SPA deep-link fallback. A static GitHub Pages site alone cannot run the private backend.
 
 No voice, speech, video, avatars or production cloud changes are included.

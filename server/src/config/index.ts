@@ -27,26 +27,17 @@ export const config = {
     branch: process.env.NEON_BRANCH || "",
     branchId: process.env.NEON_BRANCH_ID || "",
     authBaseUrl: process.env.NEON_AUTH_BASE_URL || "",
+    authIssuer: process.env.NEON_AUTH_ISSUER || process.env.NEON_AUTH_BASE_URL || "",
+    authAudience: process.env.NEON_AUTH_AUDIENCE || "",
     authJwksUrl: process.env.NEON_AUTH_JWKS_URL || "",
     aiGatewayToken: process.env.NEON_AI_GATEWAY_TOKEN || "",
     aiGatewayBaseUrl: process.env.NEON_AI_GATEWAY_BASE_URL || "",
     isPostgresConfigured: Boolean(process.env.DATABASE_URL),
     isAuthConfigured: Boolean(
-      process.env.NEON_AUTH_BASE_URL && process.env.NEON_AUTH_JWKS_URL,
+      process.env.NEON_AUTH_BASE_URL && process.env.NEON_AUTH_JWKS_URL && process.env.NEON_AUTH_AUDIENCE,
     ),
     isAiGatewayConfigured: Boolean(
       process.env.NEON_AI_GATEWAY_BASE_URL && process.env.NEON_AI_GATEWAY_TOKEN,
-    ),
-  },
-  supabase: {
-    url: process.env.SUPABASE_URL || "",
-    anonKey:
-      process.env.SUPABASE_PUBLISHABLE_KEY ||
-      process.env.SUPABASE_ANON_KEY ||
-      "",
-    isConfigured: Boolean(
-      process.env.SUPABASE_URL &&
-      (process.env.SUPABASE_PUBLISHABLE_KEY || process.env.SUPABASE_ANON_KEY),
     ),
   },
   devAuth: nodeEnv !== "production" && process.env.DEV_AUTH_ENABLED === "true",

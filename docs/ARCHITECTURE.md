@@ -6,7 +6,7 @@
 React / Vite (root src/)
   └─ /api proxy in development, explicit API URL when hosted
        └─ Express API (server/)
-            ├─ Auth: Supabase getUser + trusted app_metadata roles
+            ├─ Auth: Neon JWKS verification + server-managed account roles
             │        or signed loopback-only development student cookie
             ├─ Session ownership, version checks, idempotency, serialized mutations
             ├─ Immutable private clinical profile per session
@@ -19,7 +19,7 @@ React / Vite (root src/)
 
 The root frontend never receives a provider credential or hidden answer key before submission. The patient-generation prompt deliberately excludes diagnostic answer labels. Known labels and codes are screened from generated output. Patient replies and objective assessments must both succeed before a turn is committed. Native fetch is used inside the existing provider interface; no browser AI SDK remains.
 
-The SQLite implementation uses Node 24's `node:sqlite`, WAL and an atomic state-row upsert. It is intentionally a small, durable single-process repository. It is not designed for multi-instance concurrency or a large institutional corpus. Keep it on a persistent volume, back it up, and select a scalable adapter when deployment requirements warrant it. In-memory storage exists only as a test adapter. Supabase is currently used for authentication, not session storage.
+The SQLite implementation uses Node 24's `node:sqlite`, WAL and an atomic state-row upsert. It is intentionally a small, durable single-process repository. It is not designed for multi-instance concurrency or a large institutional corpus. Keep it on a persistent volume, back it up, and select a scalable adapter when deployment requirements warrant it. In-memory storage exists only as a test adapter. Hosted accounts use Neon Auth and the new Postgres repository. Its transaction-local snapshots preserve the clinical engine and serialize commits across processes; see NEON_ACCOUNTS.md for the current concurrency limitation. SQLite remains for local development.
 
 `client/` is Faiaz's preserved alternate frontend. It is not included in the supported root build or CI. The historical SQL migration is retained but not used/applied; its role and write policies require hardening before any future Supabase persistence integration. Do not run it from this release's setup.
 
