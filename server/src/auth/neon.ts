@@ -18,7 +18,7 @@ export async function verifyNeonIdentity(token: string): Promise<UserProfile> {
      ON CONFLICT (auth_id) DO UPDATE SET email=EXCLUDED.email, display_name=EXCLUDED.display_name, updated_at=now()
      RETURNING auth_id, email, display_name, role`,
     [payload.sub, typeof payload.email === "string" ? payload.email : "", typeof payload.name === "string" ? payload.name.slice(0,100) : "Learner"],
-  );
+  ).catch(() => { throw new AppError(503, "STORAGE_UNAVAILABLE", "Account storage is temporarily unavailable. Please try again."); });
   const row = result.rows[0];
   return { id: row.auth_id, email: row.email, displayName: row.display_name, role: row.role };
 }

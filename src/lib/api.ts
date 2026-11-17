@@ -29,8 +29,12 @@ export async function request<T>(
   body?: unknown,
   key?: string,
 ): Promise<T> {
-  const tokenResponse = await neonAuth?.$fetch<{ token: string }>("/token");
-  const token = tokenResponse?.data?.token;
+  // Neon injects the signed JWT into session.token and owns its refresh/cache.
+  const sessionResponse = await neonAuth?.getSession();
+  if (sessionResponse?.error) {
+    throw new ApiError("Account service unavailable. Please try again shortly.", 503, "AUTH_UNAVAILABLE");
+  }
+  const token = sessionResponse?.data?.session?.token;
   if (!token && !localDevelopment) {
     window.dispatchEvent(new Event("psysim:unauthenticated"));
     throw new ApiError("Your session has expired. Please sign in again.", 401, "UNAUTHENTICATED");

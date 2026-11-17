@@ -5,6 +5,20 @@ export default defineConfig({
   auth: true,
   aiGateway: true,
   functions: {
+    api: {
+      name: "PsySim Account API",
+      source: "./server/src/neonFunction.ts",
+      env: {
+        NODE_ENV: { value: "production" },
+        PSYSIM_FUNCTION: { value: "true" },
+        DEV_AUTH_ENABLED: { value: "false" },
+        ALLOW_UNREVIEWED_CASES: { value: "false" },
+        CORS_ORIGIN: { value: "https://lowkeylabib.github.io" },
+        AI_PROVIDER: { value: "gemini" },
+        GEMINI_API_KEY: { value: process.env.GEMINI_API_KEY, required: true },
+        GEMINI_MODEL: { value: process.env.GEMINI_MODEL || "gemini-3.5-flash-lite" },
+      },
+    },
     hello: { name: "Hello World", source: "./hello.ts" },
     gemini: {
       name: "PsySim Gemini Proxy",

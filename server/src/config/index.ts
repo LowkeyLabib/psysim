@@ -4,6 +4,9 @@ import path from "node:path";
 dotenv.config({ path: path.resolve(__dirname, "../../.env") });
 dotenv.config({ path: path.resolve(__dirname, "../../../.env.local") });
 const nodeEnv = process.env.NODE_ENV || "development";
+const authBaseUrl = process.env.NEON_AUTH_BASE_URL || "";
+// Managed Neon Auth signs JWTs for its origin, without /neondb/auth.
+const authOrigin = authBaseUrl ? new URL(authBaseUrl).origin : "";
 export const config = {
   port: Number(process.env.PORT || 5000),
   nodeEnv,
@@ -26,15 +29,15 @@ export const config = {
     databaseUrlUnpooled: process.env.DATABASE_URL_UNPOOLED || "",
     branch: process.env.NEON_BRANCH || "",
     branchId: process.env.NEON_BRANCH_ID || "",
-    authBaseUrl: process.env.NEON_AUTH_BASE_URL || "",
-    authIssuer: process.env.NEON_AUTH_ISSUER || process.env.NEON_AUTH_BASE_URL || "",
-    authAudience: process.env.NEON_AUTH_AUDIENCE || "",
+    authBaseUrl,
+    authIssuer: process.env.NEON_AUTH_ISSUER || authOrigin,
+    authAudience: process.env.NEON_AUTH_AUDIENCE || authOrigin,
     authJwksUrl: process.env.NEON_AUTH_JWKS_URL || "",
     aiGatewayToken: process.env.NEON_AI_GATEWAY_TOKEN || "",
     aiGatewayBaseUrl: process.env.NEON_AI_GATEWAY_BASE_URL || "",
     isPostgresConfigured: Boolean(process.env.DATABASE_URL),
     isAuthConfigured: Boolean(
-      process.env.NEON_AUTH_BASE_URL && process.env.NEON_AUTH_JWKS_URL && process.env.NEON_AUTH_AUDIENCE,
+      authBaseUrl && process.env.NEON_AUTH_JWKS_URL,
     ),
     isAiGatewayConfigured: Boolean(
       process.env.NEON_AI_GATEWAY_BASE_URL && process.env.NEON_AI_GATEWAY_TOKEN,

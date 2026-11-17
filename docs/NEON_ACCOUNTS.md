@@ -3,7 +3,9 @@
 The frontend uses the official `@neondatabase/auth` client. Neon handles passwords,
 verification emails, HttpOnly session cookies, session restoration and JWT renewal.
 PsySim never saves passwords or bearer tokens to localStorage. The Express API verifies
-JWT signature, issuer, audience, expiry and subject. Privileged roles come only from
+JWT signature, issuer, audience, expiry and subject. The client obtains the JWT from
+Neon's `getSession().data.session.token`, preserving the SDK's cache/refresh behavior.
+Privileged roles come only from
 `psysim_accounts.role`, managed by the database administrator, never signup metadata.
 
 ## Configuration
@@ -17,7 +19,9 @@ JWT signature, issuer, audience, expiry and subject. Privileged roles come only 
    Keep these tables private to the backend database role. Do not expose them via a
    browser-accessible Data API, including the clinical_profile and evaluation columns.
 3. Set server-only `DATABASE_URL`, `NEON_AUTH_BASE_URL`, `NEON_AUTH_JWKS_URL`,
-   `NEON_AUTH_ISSUER`, `NEON_AUTH_AUDIENCE` to the exact branch settings. Set
+   `NEON_AUTH_ISSUER`, `NEON_AUTH_AUDIENCE` to the exact branch settings. Managed Neon
+   Auth uses the Auth URL **origin**, without `/neondb/auth`, for both claims; the server
+   defaults to that origin if the overrides are omitted. Set
    `CORS_ORIGIN` to the frontend origin, `DEV_AUTH_ENABLED=false`, and configure the
    existing server-side AI provider. Production also requires reviewed scenarios.
 4. Set public frontend `VITE_NEON_AUTH_URL` and `VITE_API_BASE_URL`. For the existing
@@ -27,7 +31,21 @@ JWT signature, issuer, audience, expiry and subject. Privileged roles come only 
    The publishing step is skipped until both variables are set, preserving the existing
    live site while the backend/migration is configured. Builds and tests still run.
 
-`neon.ts` declares Neon Auth and the Gemini proxy but does not deploy the Express API.
+`neon.ts` now also declares the `api` function, whose entry point is
+`server/src/neonFunction.ts`. It preserves the existing Express routes behind a private
+loopback listener on Neon's long-lived Node 24 runtime. Neon injects DATABASE_URL and
+Auth URLs; only the existing Gemini credential needs to be supplied as a secret.
+The function configuration forces production mode, disables local sign-in and
+unreviewed cases, and restricts CORS to `https://lowkeylabib.github.io`.
+The general request limiter is shared across the function's loopback requests (200/minute);
+this and the repository transaction lock are small-installation concurrency limits.
+
+Publishing still requires project-scoped Neon CLI access, adding the frontend origin
+to Neon Auth trusted domains, and setting the two GitHub repository variables after
+the API is deployed and its actual URL is verified. Use `neon config plan --env server/.env`
+before any apply; the existing `hello` and `gemini` functions must be preserved.
+Do not enable unreviewed cases to work around an empty production scenario catalog.
+
 The legacy standalone experience remains development-only. Production without an
 Auth URL shows a setup notice. Browser-only case answers are excluded from production
 bundles; old anonymous browser history is not migrated into new accounts.
@@ -52,8 +70,19 @@ frontend authentication state.
 ## Verification
 
 Local tests cover auth transport, signed-token rejection, route ownership, private
-history and clinical behavior. Live signup, email delivery and cross-device restoration
-require the actual Neon branch configuration; local mocks do not establish live readiness.
+history and clinical behavior. On 17 November 2026, real temporary accounts verified:
+
+- Neon registration, existing-account login, session restoration and logout.
+- Signed identity accepted by the API; invalid tokens rejected.
+- Separate private histories; another account's consultation, messages, progress and
+  result endpoints return 404.
+- A browser consultation received a real Bengali response to a mixed Bengali/English
+  question. Its transcript and 2/6 completed objectives survived a browser refresh.
+- The bundled production function passed health, authentication, CORS, request body
+  limit and disabled-development-access checks locally.
+
+Only verification accounts and their data were removed after testing. Email delivery,
+cross-device browser behavior and the hosted function remain unverified until publishing.
 
 ## Existing project verified in the console
 

@@ -6,13 +6,22 @@ vi.mock("../lib/config", () => ({
   apiBase: "https://psysim.test/api",
 }));
 vi.mock("../lib/neonAuth", () => ({
-  neonAuth: { $fetch: mocks.token },
+  neonAuth: { getSession: mocks.token },
 }));
 import { liveApi, request } from "../lib/api";
 beforeEach(() => {
-  mocks.token.mockResolvedValue({ data: { token: "test-token" } });
+  mocks.token.mockResolvedValue({ data: { session: { token: "test-token" } } });
 });
 describe("authenticated API transport", () => {
+  it("preserves the session when the identity service is temporarily unavailable", async () => {
+    mocks.token.mockResolvedValue({ error: { status: 503 } });
+    const invalidate = vi.fn();
+    window.addEventListener("psysim:unauthenticated", invalidate);
+    try {
+      await expect(liveApi.me()).rejects.toMatchObject({ status: 503, code: "AUTH_UNAVAILABLE" });
+      expect(invalidate).not.toHaveBeenCalled();
+    } finally { window.removeEventListener("psysim:unauthenticated", invalidate); }
+  });
   it("sends bearer, Unicode body, version, and idempotency key to the encoded endpoint", async () => {
     const fetch = vi
       .fn()

@@ -112,12 +112,16 @@ app.use((_req, _res, next) =>
   next(new AppError(404, "NOT_FOUND", "This endpoint does not exist.")),
 );
 app.use(errorHandler);
-if (config.nodeEnv !== "test") {
+export function initializeStorage() {
   const pool = getNeonPool();
   if (config.nodeEnv === "production" && (!config.neon.isAuthConfigured || !pool))
     throw new Error("Production requires Neon Auth and DATABASE_URL configuration.");
   const store = pool ? null : new SqliteRepository(config.databaseFile, SEED_SCENARIOS);
   setRepository(pool ? createPostgresRepository(pool, SEED_SCENARIOS) : store!);
+  return { pool, store };
+}
+if (config.nodeEnv !== "test" && process.env.PSYSIM_FUNCTION !== "true") {
+  const { pool, store } = initializeStorage();
   const server = app.listen(config.port, config.host, () =>
     console.log(
       `[PsySim] Listening on ${config.host}:${config.port}; provider: ${config.aiProvider}`,

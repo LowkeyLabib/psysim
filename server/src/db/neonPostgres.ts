@@ -13,6 +13,7 @@ export function getNeonPool(): Pool | null {
     pool = new Pool({
       connectionString: config.neon.databaseUrl,
       max: 10,
+      connectionTimeoutMillis: 15_000,
     });
   }
   return pool;
