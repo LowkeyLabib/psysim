@@ -12,6 +12,7 @@ import {
   Language,
 } from "../types";
 import { AppError } from "../middleware/AppError";
+import { SCENARIO_CATEGORIES } from "../knowledge/seedScenarios.js";
 type Receipt = { signature: string; session: PublicSession };
 export type State = {
   sessions: Record<string, PublicSession>;
@@ -332,21 +333,33 @@ export class InMemoryRepository implements IRepository {
       draft.status = decision;
       draft.reviewNote = note;
       draft.version++;
-      if (decision === "APPROVED")
+      if (decision === "APPROVED") {
+        const category = SCENARIO_CATEGORIES.find(
+          (c) => c.id === draft.categoryId,
+        );
+        const existingObjectives = Array.isArray(profile.mandatoryObjectives)
+          ? profile.mandatoryObjectives
+          : [];
         this.state.scenarios[id] = {
           ...structuredClone(profile),
           id,
           categoryId: draft.categoryId,
+          categoryName: category?.name || profile.categoryName,
           difficulty: draft.difficulty,
-          mandatoryObjectives: draft.objectives.map((o) => ({
-            ...o,
-            guidance: "Explore this interview area.",
-          })),
+          mandatoryObjectives: draft.objectives.map((o) => {
+            const prev = existingObjectives.find((p) => p.id === o.id);
+            return {
+              ...o,
+              guidance: prev?.guidance || "Explore this interview area.",
+              ...(prev?.keywordsEn ? { keywordsEn: prev.keywordsEn } : {}),
+              ...(prev?.keywordsBn ? { keywordsBn: prev.keywordsBn } : {}),
+            };
+          }),
           rubric: draft.rubric,
           sourceReferences: draft.sourceReferences,
           reviewStatus: "APPROVED",
         };
-      else if (this.state.scenarios[id])
+      } else if (this.state.scenarios[id])
         this.state.scenarios[id].reviewStatus = "REJECTED";
       this.state.reviews.push({
         scenarioId: id,

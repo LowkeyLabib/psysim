@@ -23,6 +23,11 @@ export interface Category {
   name: string;
   description: string;
 }
+export interface ScenarioAvailability {
+  available: boolean;
+  categoryId: string;
+  difficulty: Difficulty;
+}
 export interface CreateSessionInput {
   mode: Mode;
   difficulty: Difficulty;
@@ -142,6 +147,7 @@ export interface ScenarioDraft extends Omit<ScenarioInput, "status"> {
 export interface PsySimApi {
   me(): Promise<UserProfile>;
   categories(): Promise<Category[]>;
+  availableScenarios?(): Promise<ScenarioAvailability[]>;
   sessions(cursor?: string): Promise<SessionPage>;
   create(input: CreateSessionInput, key: string): Promise<PublicSession>;
   session(id: string): Promise<PublicSession>;

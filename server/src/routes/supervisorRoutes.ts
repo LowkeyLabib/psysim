@@ -2,7 +2,11 @@ import { Router } from "express";
 import { randomUUID } from "node:crypto";
 import { repository } from "../db/repository";
 import { ReviewScenarioZod } from "../types";
-import { ScenarioInputZod, validateForReview } from "../types/scenarioSchema";
+import {
+  ScenarioInputZod,
+  normalizeScenarioProfile,
+  validateForReview,
+} from "../types/scenarioSchema";
 import { requireRole } from "../middleware/auth";
 import { AppError } from "../middleware/AppError";
 export const supervisorRoutes = Router();
@@ -36,7 +40,7 @@ for (const method of ["post", "patch"] as const)
             throw new AppError(404, "NOT_FOUND", "Case does not exist.");
           if (input.status === "PENDING_REVIEW") {
             try {
-              validateForReview(input);
+              validateForReview(input, id);
             } catch {
               throw new AppError(
                 422,
@@ -45,8 +49,9 @@ for (const method of ["post", "patch"] as const)
               );
             }
           }
+          const clinicalProfile = normalizeScenarioProfile(input, id);
           return repository.saveScenarioDraft(
-            { ...input, id, version: 1 },
+            { ...input, clinicalProfile, id, version: 1 },
             expectedVersion,
           );
         });
@@ -69,7 +74,7 @@ supervisorRoutes.post("/scenarios/:id/approve", async (req, res, next) => {
           throw new AppError(404, "NOT_FOUND", "Case does not exist.");
         if (body.decision === "APPROVED") {
           try {
-            validateForReview({ ...draft, status: "PENDING_REVIEW" });
+            validateForReview({ ...draft, status: "PENDING_REVIEW" }, draft.id);
           } catch {
             throw new AppError(
               422,

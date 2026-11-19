@@ -7,6 +7,59 @@ import { demoMode } from '../lib/config';
 import { errorMessage, label } from '../lib/session';
 import { ErrorNotice, Loading, PageTitle } from '../components/ui';
 const base = (): ScenarioInput => ({ title: '', categoryId: '', difficulty: 'beginner', status: 'DRAFT', clinicalProfile: {}, sourceReferences: [], objectives: [{ id: crypto.randomUUID(), title: 'Presenting complaint', required: true, criteria: '' }], rubric: [{ name: 'Rapport and empathy', weight: 20, criteria: '' }, { name: 'History taking', weight: 25, criteria: '' }, { name: 'Psychiatric assessment', weight: 20, criteria: '' }, { name: 'Risk and safety', weight: 20, criteria: '' }, { name: 'Clinical reasoning', weight: 15, criteria: '' }] });
+const starterProfile = (categoryId: string, difficulty: Difficulty) =>
+  JSON.stringify(
+    {
+      patient: {
+        name: "Fictional Patient",
+        age: 28,
+        gender: "female",
+        occupation: "University Student",
+        personality: "Cooperative, anxious when discussing stressors",
+        language: "en",
+      },
+      presentingComplaint: "",
+      openingMessage: {
+        en: "",
+        bn: "",
+        banglish: "",
+        mixed: "",
+      },
+      symptoms: [""],
+      symptomTimeline: {
+        onset: "",
+        duration: "",
+        progression: "",
+        fluctuation: "",
+      },
+      psychiatricHistory: "",
+      medicalHistory: "",
+      medications: [],
+      substanceHistory: "",
+      riskFactors: [""],
+      protectiveFactors: [""],
+      negativeFindings: [""],
+      approvedDiagnosis: {
+        name: "",
+        icd11Code: "",
+        dsm5Code: "",
+        specifiers: [],
+      },
+      acceptedDiagnoses: [
+        {
+          name: "",
+          isExact: true,
+          synonyms: [],
+        },
+      ],
+      reviewStatus: "DRAFT",
+      demonstration: false,
+      categoryId,
+      difficulty,
+    },
+    null,
+    2,
+  );
 export default function Supervisor() {
   const { user } = useAuth(); const allowed = demoMode || user?.role === 'supervisor' || user?.role === 'administrator';
   const [cases, setCases] = useState<ScenarioDraft[]>([]); const [categories, setCategories] = useState<Category[]>([]); const [selected, setSelected] = useState<ScenarioDraft | null>(null); const [draft, setDraft] = useState<ScenarioInput>(base); const [profile, setProfile] = useState('{}'); const [sources, setSources] = useState(''); const [note, setNote] = useState(''); const [error, setError] = useState(''); const [notice, setNotice] = useState(''); const [busy, setBusy] = useState(false); const [loading, setLoading] = useState(true); const [revision, setRevision] = useState(0); const [dirty, setDirty] = useState(false);
@@ -30,8 +83,8 @@ export default function Supervisor() {
     if (!window.confirm(`${decision === 'APPROVED' ? 'Approve' : 'Reject'} this saved case revision? This decision will be recorded in the review history.`)) return;
     setBusy(true); setError(''); try { const saved = await api.reviewScenario(selected.id, selected.version, decision, note); setSelected(saved); setNotice(`Case ${label(saved.status).toLowerCase()}.`); setRevision(n => n + 1); } catch (e) { setError(errorMessage(e)); } finally { setBusy(false); }
   }
-  return <><PageTitle eyebrow="CLINICAL GOVERNANCE" title={demoMode ? 'Supervisor workspace preview' : 'Carefully authored. Thoughtfully reviewed.'} description="Define consistent cases, meaningful objectives, and an evidence-based review rubric." action={<button className="button primary" onClick={() => edit(null)}><Plus size={17}/>New case</button>}/>{demoMode && <div className="notice">Preview only. Drafts stay in this browser; approval is disabled. No case here is clinician-approved.</div>}<div className="supervisor-layout"><aside className="panel case-list"><h2>Case library</h2>{cases.length ? cases.map(s => <button key={s.id} className={`case-item ${s.id === selected?.id ? 'selected' : ''}`} onClick={() => edit(s)}><strong>{s.title}</strong><span className="badge">{label(s.status)}</span><small>Revision {s.version}</small></button>) : <p className="muted">No cases yet. Create a draft to begin the review workflow.</p>}</aside><section className="panel case-editor"><div className="section-heading"><h2>{selected ? 'Edit case' : 'New case draft'}</h2><span className="badge">{selected ? label(selected.status) : 'Draft'}</span></div>{error && <ErrorNotice message={error} retry={() => setRevision(n => n + 1)}/>} {notice && <p className="notice" role="status">{notice}</p>}<form onSubmit={save}><label>Case title<input required value={draft.title} maxLength={160} onChange={e => update({ title: e.target.value })}/></label><div className="form-grid"><label>Category<select value={draft.categoryId} onChange={e => update({ categoryId: e.target.value })} required><option value="">Choose category</option>{categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select></label><label>Difficulty<select value={draft.difficulty} onChange={e => update({ difficulty: e.target.value as Difficulty })}>{['beginner', 'intermediate', 'advanced'].map(d => <option key={d} value={d}>{label(d)}</option>)}</select></label></div><label>Save as<select value={draft.status} onChange={e => update({ status: e.target.value as ScenarioInput['status'] })}><option value="DRAFT">Draft</option><option value="PENDING_REVIEW">Pending review</option></select></label><p className="fine-print">Saving changes to approved material invalidates its approval and creates a new reviewable revision.</p><label>Structured clinical profile (JSON)<textarea className="code-editor" rows={10} value={profile} onChange={e => { setProfile(e.target.value); setDirty(true); }} spellCheck={false} required aria-describedby="profile-help"/></label><p id="profile-help" className="fine-print">Include the fixed synthetic patient history, diagnosis, accepted answers, multilingual synonyms, relevant findings and source references. The backend validates the full clinical schema.</p><label>Approved source reference IDs (one per line)<textarea rows={3} value={sources} onChange={e => { setSources(e.target.value); setDirty(true); }}/></label>
+  return <><PageTitle eyebrow="CLINICAL GOVERNANCE" title={demoMode ? 'Supervisor workspace preview' : 'Carefully authored. Thoughtfully reviewed.'} description="Define consistent cases, meaningful objectives, and an evidence-based review rubric." action={<button className="button primary" onClick={() => edit(null)}><Plus size={17}/>New case</button>}/>{demoMode && <div className="notice">Preview only. Drafts stay in this browser; approval is disabled. No case here is clinician-approved.</div>}<div className="supervisor-layout"><aside className="panel case-list"><h2>Case library</h2>{cases.length ? cases.map(s => <button key={s.id} className={`case-item ${s.id === selected?.id ? 'selected' : ''}`} onClick={() => edit(s)}><strong>{s.title}</strong><span className="badge">{label(s.status)}</span><small>Revision {s.version}</small></button>) : <p className="muted">No cases yet. Create a draft to begin the review workflow.</p>}</aside><section className="panel case-editor"><div className="section-heading"><h2>{selected ? 'Edit case' : 'New case draft'}</h2><span className="badge">{selected ? label(selected.status) : 'Draft'}</span></div>{error && <ErrorNotice message={error} retry={() => setRevision(n => n + 1)}/>} {notice && <p className="notice" role="status">{notice}</p>}<form onSubmit={save}><label>Case title<input required value={draft.title} maxLength={160} onChange={e => update({ title: e.target.value })}/></label><div className="form-grid"><label>Category<select value={draft.categoryId} onChange={e => update({ categoryId: e.target.value })} required><option value="">Choose category</option>{categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select></label><label>Difficulty<select value={draft.difficulty} onChange={e => update({ difficulty: e.target.value as Difficulty })}>{['beginner', 'intermediate', 'advanced'].map(d => <option key={d} value={d}>{label(d)}</option>)}</select></label></div><label>Save as<select value={draft.status} onChange={e => update({ status: e.target.value as ScenarioInput['status'] })}><option value="DRAFT">Draft</option><option value="PENDING_REVIEW">Pending review</option></select></label><p className="fine-print">Saving changes to approved material invalidates its approval and creates a new reviewable revision.</p><label>Structured clinical profile (JSON)<textarea className="code-editor" rows={10} value={profile} onChange={e => { setProfile(e.target.value); setDirty(true); }} spellCheck={false} required aria-describedby="profile-help"/></label><div className="row-between"><p id="profile-help" className="fine-print">Include the fixed synthetic patient history, diagnosis, accepted answers, multilingual synonyms, relevant findings and source references. The backend validates the full clinical schema.</p>{!selected && <button type="button" className="text-button" onClick={() => { setProfile(starterProfile(draft.categoryId || 'depressive', draft.difficulty)); setDirty(true); }}>Insert starter template</button>}</div><label>Approved source reference IDs (one per line)<textarea rows={3} value={sources} onChange={e => { setSources(e.target.value); setDirty(true); }}/></label>
     <div className="section-heading"><h3>Interview objectives</h3><button className="text-button" type="button" onClick={() => update({ objectives: [...draft.objectives, { id: crypto.randomUUID(), title: '', criteria: '', required: true }] })}><Plus size={15}/>Add objective</button></div>{draft.objectives.map((o, index) => <fieldset className="editor-row" key={o.id}><legend>Objective {index + 1}</legend><label>Neutral student-facing title<input required value={o.title} onChange={e => update({ objectives: draft.objectives.map(x => x.id === o.id ? { ...x, title: e.target.value } : x) })}/></label><label>Private evidence criteria<textarea required rows={2} value={o.criteria} onChange={e => update({ objectives: draft.objectives.map(x => x.id === o.id ? { ...x, criteria: e.target.value } : x) })}/></label><div className="row-between"><label className="checkbox-label"><input type="checkbox" checked={o.required} onChange={e => update({ objectives: draft.objectives.map(x => x.id === o.id ? { ...x, required: e.target.checked } : x) })}/>Mandatory</label><button type="button" className="icon-button" aria-label={`Remove objective ${index + 1}`} onClick={() => update({ objectives: draft.objectives.filter(x => x.id !== o.id) })}><Trash2 size={16}/></button></div></fieldset>)}
     <div className="section-heading"><h3>Evaluation rubric</h3><span className="muted">{draft.rubric.reduce((sum, r) => sum + r.weight, 0)} / 100%</span></div>{draft.rubric.map((r, index) => <div className="editor-row" key={index}><div className="form-grid"><label>Area<input required value={r.name} onChange={e => update({ rubric: draft.rubric.map((x, i) => i === index ? { ...x, name: e.target.value } : x) })}/></label><label>Weight (%)<input type="number" min={0} max={100} required value={r.weight} onChange={e => update({ rubric: draft.rubric.map((x, i) => i === index ? { ...x, weight: Number(e.target.value) } : x) })}/></label></div><label>Assessment criteria<textarea required rows={2} value={r.criteria} onChange={e => update({ rubric: draft.rubric.map((x, i) => i === index ? { ...x, criteria: e.target.value } : x) })}/></label></div>)}<button className="button primary" disabled={busy}><Save size={17}/>{busy ? 'Saving…' : 'Save case revision'}</button></form>
-    {selected && <section className="review-panel"><h3><ShieldCheck size={18}/>Clinical review</h3><p>Review the saved profile, answer key, sources, objectives, and rubric before recording a decision.</p><label>Review note<textarea value={note} onChange={e => setNote(e.target.value)} maxLength={4000} rows={3}/></label><div className="modal-actions"><button className="button secondary" disabled={demoMode || busy || dirty || !note.trim() || selected.status !== 'PENDING_REVIEW'} onClick={() => review('REJECTED')}>Reject</button><button className="button primary" disabled={demoMode || busy || dirty || !note.trim() || selected.status !== 'PENDING_REVIEW'} onClick={() => review('APPROVED')}>Approve case</button></div>{dirty && <p className="fine-print">Save your changes before reviewing this revision.</p>}</section>}</section></div></>;
+    {selected && <section className="review-panel"><h3><ShieldCheck size={18}/>Clinical review</h3><p>Review the saved profile, answer key, sources, objectives, and rubric before recording a decision.</p>{selected.reviewNote && <p className="notice">Last review note: {selected.reviewNote}</p>}<label>Review note (minimum 10 characters)<textarea value={note} onChange={e => setNote(e.target.value)} maxLength={4000} rows={3}/></label>{selected.status === 'PENDING_REVIEW' && note.trim().length > 0 && note.trim().length < 10 && <p className="fine-print">Enter at least 10 characters in the review note before recording a decision.</p>}<div className="modal-actions"><button className="button secondary" disabled={demoMode || busy || dirty || note.trim().length < 10 || selected.status !== 'PENDING_REVIEW'} onClick={() => review('REJECTED')}>Reject</button><button className="button primary" disabled={demoMode || busy || dirty || note.trim().length < 10 || selected.status !== 'PENDING_REVIEW'} onClick={() => review('APPROVED')}>Approve case</button></div>{dirty && <p className="fine-print">Save your changes before reviewing this revision.</p>}</section>}</section></div></>;
 }

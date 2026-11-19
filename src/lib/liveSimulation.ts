@@ -727,6 +727,14 @@ export const liveSimulationApi: PsySimApi = {
     return CLINICAL_CATEGORIES;
   },
 
+  async availableScenarios() {
+    return SEED_SCENARIOS.map((sc) => ({
+      available: true,
+      categoryId: sc.categoryId,
+      difficulty: sc.difficulty,
+    }));
+  },
+
   async sessions() {
     const list = loadSessions();
     const results = loadResults();

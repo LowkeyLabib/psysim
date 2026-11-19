@@ -9,13 +9,26 @@ scenarioRoutes.get('/categories', (_req, res) => {
   res.json(SCENARIO_CATEGORIES);
 });
 
-// GET /api/scenarios -> public metadata only
-scenarioRoutes.get('/', async (_req, res, next) => {
+// GET /api/scenarios -> public availability metadata for clinically approved cases only
+scenarioRoutes.get('/', async (req, res, next) => {
   try {
-    const list = await repository.getScenarios({ status: 'APPROVED' });
+    const categoryId =
+      typeof req.query.categoryId === 'string' && req.query.categoryId.trim()
+        ? req.query.categoryId.trim()
+        : undefined;
+    const difficulty =
+      typeof req.query.difficulty === 'string' && req.query.difficulty.trim()
+        ? req.query.difficulty.trim()
+        : undefined;
+    const list = await repository.getScenarios({
+      categoryId,
+      difficulty,
+      status: 'APPROVED',
+    });
     const metadata = list.map((s) => ({
       available: true,
       categoryId: s.categoryId,
+      difficulty: s.difficulty,
     }));
     res.json(metadata);
   } catch (err) {

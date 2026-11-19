@@ -6,9 +6,10 @@ import type {
   Difficulty,
   Language,
   Mode,
+  ScenarioAvailability,
 } from "../../shared/contracts";
 import { api } from "../lib/api";
-import { demoMode } from "../lib/config";
+import { demoMode, localDevelopment } from "../lib/config";
 import { errorMessage, languageNames } from "../lib/session";
 import { ErrorNotice, PageTitle } from "../components/ui";
 const difficulties: {
@@ -48,6 +49,9 @@ export default function NewSession() {
   const [language, setLanguage] = useState<Language>("en");
   const [category, setCategory] = useState("");
   const [categories, setCategories] = useState<Category[]>([]);
+  const [available, setAvailable] = useState<ScenarioAvailability[] | null>(
+    null,
+  );
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [revision, setRevision] = useState(0);
@@ -55,10 +59,15 @@ export default function NewSession() {
   const pending = useRef<{ payload: string; key: string } | null>(null);
   useEffect(() => {
     let active = true;
-    api
-      .categories()
-      .then((r) => {
-        if (active) setCategories(r);
+    setError("");
+    Promise.all([
+      api.categories(),
+      api.availableScenarios ? api.availableScenarios() : Promise.resolve(null),
+    ])
+      .then(([cats, scenarios]) => {
+        if (!active) return;
+        setCategories(cats);
+        setAvailable(scenarios);
       })
       .catch((e) => {
         if (active) setError(errorMessage(e));
@@ -67,6 +76,26 @@ export default function NewSession() {
       active = false;
     };
   }, [revision]);
+  const enforceReviewedAvailability =
+    !demoMode && !localDevelopment && available !== null;
+  const noApprovedCases =
+    enforceReviewedAvailability && available.length === 0;
+  const selectionUnavailable =
+    enforceReviewedAvailability &&
+    available.length > 0 &&
+    (mode === "challenge"
+      ? !available.some((s) => s.difficulty === difficulty)
+      : Boolean(category) &&
+        !available.some(
+          (s) => s.categoryId === category && s.difficulty === difficulty,
+        ));
+  const availabilityNotice = noApprovedCases
+    ? "No clinically reviewed cases are currently available. A supervisor or administrator must review and approve at least one case before consultations can start."
+    : selectionUnavailable
+      ? mode === "custom"
+        ? "No clinically reviewed case is available for this category and difficulty yet. Choose another option or wait for supervisor approval."
+        : "No clinically reviewed case is available for this difficulty yet. Choose another difficulty or wait for supervisor approval."
+      : "";
   async function start(e: FormEvent) {
     e.preventDefault();
     if (busy) return;
@@ -239,6 +268,11 @@ export default function NewSession() {
               only. Clinical scenario variation requires the backend.
             </p>
           )}
+          {availabilityNotice && (
+            <div className="notice" role="status">
+              {availabilityNotice}
+            </div>
+          )}
           {error && (
             <ErrorNotice
               message={error}
@@ -247,7 +281,12 @@ export default function NewSession() {
           )}
           <button
             className="button primary full"
-            disabled={busy || (mode === "custom" && !category)}
+            disabled={
+              busy ||
+              (mode === "custom" && !category) ||
+              noApprovedCases ||
+              selectionUnavailable
+            }
           >
             {busy ? "Preparing your session…" : "Begin consultation"}
             <ArrowRight size={17} />

@@ -67,7 +67,9 @@ sessionRoutes.post("/", async (req, res, next) => {
         throw new AppError(
           404,
           "SCENARIO_NOT_FOUND",
-          "No reviewed case is available for this category and difficulty.",
+          body.mode === "custom"
+            ? "No reviewed case is available for this category and difficulty."
+            : "No reviewed case is available for this difficulty.",
         );
       const scenario = available[Math.floor(Math.random() * available.length)];
       return repository.createSession({

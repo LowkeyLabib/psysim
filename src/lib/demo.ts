@@ -40,6 +40,15 @@ function mutate(id: string, action: (s: PublicSession, store: Store) => void, ke
 export const demoApi: PsySimApi = {
   async me() { return { id: 'demo-student', displayName: 'Demo learner', email: 'demo@local.invalid', role: 'student' }; },
   async categories() { return categories; },
+  async availableScenarios() {
+    return categories.flatMap((c) =>
+      (['beginner', 'intermediate', 'advanced'] as const).map((difficulty) => ({
+        available: true,
+        categoryId: c.id,
+        difficulty,
+      })),
+    );
+  },
   async sessions() { const store = read(); const items = [...store.sessions].reverse().map(s => ({ id: s.id, patientName: s.patient.name, mode: s.mode, difficulty: s.difficulty, state: s.state, createdAt: s.createdAt, outcome: store.results[s.id]?.outcome })); return { items, nextCursor: null, stats: { completed: items.filter(s => s.state === 'EVALUATED').length, graded: 0, correct: 0, total: items.length } }; },
   async create(input, key) {
     const store = read(); if (store.receipts[key]) return store.receipts[key];

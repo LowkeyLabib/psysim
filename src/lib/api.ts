@@ -97,6 +97,7 @@ const pathId = (id: string) => encodeURIComponent(id);
 export const liveApi: PsySimApi = {
   me: () => request("/me"),
   categories: () => request("/scenarios/categories"),
+  availableScenarios: () => request("/scenarios"),
   sessions: (cursor) =>
     request(
       `/me/sessions${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`,

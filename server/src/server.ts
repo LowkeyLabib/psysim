@@ -116,8 +116,9 @@ export function initializeStorage() {
   const pool = getNeonPool();
   if (config.nodeEnv === "production" && (!config.neon.isAuthConfigured || !pool))
     throw new Error("Production requires Neon Auth and DATABASE_URL configuration.");
-  const store = pool ? null : new SqliteRepository(config.databaseFile, SEED_SCENARIOS);
-  setRepository(pool ? createPostgresRepository(pool, SEED_SCENARIOS) : store!);
+  const initialSeeds = config.nodeEnv === "production" ? [] : SEED_SCENARIOS;
+  const store = pool ? null : new SqliteRepository(config.databaseFile, initialSeeds);
+  setRepository(pool ? createPostgresRepository(pool, initialSeeds) : store!);
   return { pool, store };
 }
 if (config.nodeEnv !== "test" && process.env.PSYSIM_FUNCTION !== "true") {

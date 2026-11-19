@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { InternalClinicalProfile, ScenarioInput } from "./index";
+import { SCENARIO_CATEGORIES } from "../knowledge/seedScenarios.js";
 const text = z.string().trim().min(1).max(6000);
 const strings = z.array(text).max(60);
 export const ClinicalProfileZod = z.object({
@@ -99,10 +100,54 @@ export const ScenarioInputZod = z
     (v) => v.objectives.some((o) => o.required),
     "At least one required objective is needed",
   );
+export function normalizeScenarioProfile(
+  input: ScenarioInput,
+  fallbackId?: string,
+): Record<string, unknown> {
+  const raw = input.clinicalProfile as Record<string, unknown>;
+  const category = SCENARIO_CATEGORIES.find((c) => c.id === input.categoryId);
+  const existingObjectives = Array.isArray(raw.mandatoryObjectives)
+    ? raw.mandatoryObjectives
+    : [];
+  const existingId =
+    typeof raw.id === "string" && raw.id.trim() ? raw.id.trim() : fallbackId;
+  return {
+    ...raw,
+    ...(existingId ? { id: existingId } : {}),
+    categoryId: input.categoryId,
+    categoryName:
+      category?.name ||
+      (typeof raw.categoryName === "string" ? raw.categoryName : ""),
+    difficulty: input.difficulty,
+    reviewStatus: input.status,
+    mandatoryObjectives: input.objectives.map((o) => {
+      const prev = existingObjectives.find(
+        (p): p is Record<string, unknown> =>
+          Boolean(
+            p &&
+              typeof p === "object" &&
+              (p as { id?: unknown }).id === o.id,
+          ),
+      );
+      return {
+        ...o,
+        guidance:
+          typeof prev?.guidance === "string" && prev.guidance.trim()
+            ? prev.guidance
+            : "Explore this interview area.",
+        ...(Array.isArray(prev?.keywordsEn) ? { keywordsEn: prev.keywordsEn } : {}),
+        ...(Array.isArray(prev?.keywordsBn) ? { keywordsBn: prev.keywordsBn } : {}),
+      };
+    }),
+  };
+}
+
 export function validateForReview(
   input: ScenarioInput,
+  fallbackId?: string,
 ): InternalClinicalProfile {
-  const profile = ClinicalProfileZod.parse(input.clinicalProfile);
+  const normalized = normalizeScenarioProfile(input, fallbackId);
+  const profile = ClinicalProfileZod.parse(normalized);
   if (
     !input.sourceReferences.length ||
     Math.abs(input.rubric.reduce((s, r) => s + r.weight, 0) - 100) > 0.01
