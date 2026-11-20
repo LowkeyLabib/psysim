@@ -7,6 +7,7 @@ import {
   PublicSession,
 } from "../types";
 import { repository } from "../db/repository";
+import { resolveRunnableScenarios } from "../knowledge/runnableScenarios.js";
 import { PatientSimulationEngine } from "../simulation/engine";
 import { InterviewEvaluator } from "../interview/evaluator";
 import { DiagnosisMatcher } from "../diagnosis/matcher";
@@ -51,18 +52,11 @@ sessionRoutes.post("/", async (req, res, next) => {
     const s = await repository.exclusive(`create:${r.key}`, async () => {
       const cached = await repository.getIdempotencyReceipt(r.key, r.signature);
       if (cached) return cached;
-      const candidates = await repository.getScenarios({
+      const { approved, fallback } = await resolveRunnableScenarios({
         categoryId: body.mode === "custom" ? body.categoryId : undefined,
         difficulty: body.difficulty,
       });
-      const approved = candidates.filter((s) => s.reviewStatus === "APPROVED");
-      const available = approved.length
-        ? approved
-        : config.allowUnreviewed
-          ? candidates.filter(
-              (s) => s.demonstration && s.reviewStatus === "DRAFT",
-            )
-          : [];
+      const available = approved.length ? approved : fallback;
       if (!available.length)
         throw new AppError(
           404,

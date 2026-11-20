@@ -89,13 +89,20 @@ export default function NewSession() {
         !available.some(
           (s) => s.categoryId === category && s.difficulty === difficulty,
         ));
+  const unreviewedPracticeActive =
+    enforceReviewedAvailability &&
+    available.length > 0 &&
+    !selectionUnavailable &&
+    available.some((s) => s.reviewed === false);
   const availabilityNotice = noApprovedCases
     ? "No clinically reviewed cases are currently available. A supervisor or administrator must review and approve at least one case before consultations can start."
     : selectionUnavailable
       ? mode === "custom"
         ? "No clinically reviewed case is available for this category and difficulty yet. Choose another option or wait for supervisor approval."
         : "No clinically reviewed case is available for this difficulty yet. Choose another difficulty or wait for supervisor approval."
-      : "";
+      : unreviewedPracticeActive
+        ? "Practice consultations currently use unreviewed fictional educational cases until a supervisor approves reviewed cases."
+        : "";
   async function start(e: FormEvent) {
     e.preventDefault();
     if (busy) return;

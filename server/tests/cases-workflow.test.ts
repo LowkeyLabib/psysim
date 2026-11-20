@@ -285,4 +285,39 @@ describe("clinical case availability, approvals, and simulation modes", () => {
     expect(stored?.categoryName).toBe("Anxiety disorders");
     expect(stored?.reviewStatus).toBe("APPROVED");
   });
+
+  it("allows clearly labeled unreviewed consultations when allowUnreviewed is enabled and catalog has 0 approved cases", async () => {
+    const repo = new InMemoryRepository([]);
+    setRepository(repo);
+    config.allowUnreviewed = true;
+    auth.getUser.mockResolvedValue({
+      id: "stu-unrev",
+      email: "student@test.invalid",
+      displayName: "Student",
+      role: "student",
+    });
+
+    const avail = await request(app)
+      .get("/api/scenarios")
+      .set("Authorization", "Bearer student");
+    expect(avail.status).toBe(200);
+    expect(avail.body.length).toBe(21);
+    expect(avail.body.every((item: { reviewed?: boolean }) => item.reviewed === false)).toBe(true);
+
+    const ch = await request(app)
+      .post("/api/sessions")
+      .set("Authorization", "Bearer student")
+      .set("Idempotency-Key", "k-unrev-ch")
+      .send({ mode: "challenge", difficulty: "beginner", language: "en" });
+    expect(ch.status).toBe(201);
+    expect(ch.body.caseReviewStatus).toBe("DRAFT");
+
+    const cu = await request(app)
+      .post("/api/sessions")
+      .set("Authorization", "Bearer student")
+      .set("Idempotency-Key", "k-unrev-cu")
+      .send({ mode: "custom", categoryId: "depressive", difficulty: "beginner", language: "bn" });
+    expect(cu.status).toBe(201);
+    expect(cu.body.caseReviewStatus).toBe("DRAFT");
+  });
 });

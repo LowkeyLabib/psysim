@@ -12,7 +12,7 @@ export default defineConfig({
         NODE_ENV: { value: "production", required: true },
         PSYSIM_FUNCTION: { value: "true", required: true },
         DEV_AUTH_ENABLED: { value: "false", required: true },
-        ALLOW_UNREVIEWED_CASES: { value: "false", required: true },
+        ALLOW_UNREVIEWED_CASES: { value: "true", required: true },
         CORS_ORIGIN: { value: "https://lowkeylabib.github.io", required: true },
         AI_PROVIDER: { value: "gemini", required: true },
         GEMINI_API_KEY: { value: process.env.GEMINI_API_KEY, required: true },

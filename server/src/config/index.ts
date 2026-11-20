@@ -45,8 +45,7 @@ export const config = {
   },
   devAuth: nodeEnv !== "production" && process.env.DEV_AUTH_ENABLED === "true",
   devAuthSecret: process.env.DEV_AUTH_SECRET || "",
-  allowUnreviewed:
-    nodeEnv !== "production" && process.env.ALLOW_UNREVIEWED_CASES === "true",
+  allowUnreviewed: process.env.ALLOW_UNREVIEWED_CASES === "true",
   databaseFile:
     process.env.DATABASE_FILE ||
     path.resolve(__dirname, "../../data/psysim.sqlite"),

@@ -27,6 +27,7 @@ export interface ScenarioAvailability {
   available: boolean;
   categoryId: string;
   difficulty: Difficulty;
+  reviewed?: boolean;
 }
 export interface CreateSessionInput {
   mode: Mode;

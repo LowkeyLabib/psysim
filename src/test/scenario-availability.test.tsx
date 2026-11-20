@@ -115,4 +115,18 @@ describe("NewSession scenario availability UX", () => {
       expect.any(String),
     );
   });
+
+  it("keeps Begin consultation usable with clear unreviewed notice when practice cases have reviewed=false", async () => {
+    apiMocks.availableScenarios.mockResolvedValue([
+      { available: true, categoryId: "depressive", difficulty: "beginner", reviewed: false },
+    ]);
+    renderNewSession();
+
+    expect(await screen.findByRole("status")).toHaveTextContent(
+      "unreviewed fictional educational cases",
+    );
+    expect(
+      screen.getByRole("button", { name: "Begin consultation" }),
+    ).toBeEnabled();
+  });
 });
