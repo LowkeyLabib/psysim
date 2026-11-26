@@ -110,23 +110,38 @@ describe("NewSession scenario availability UX", () => {
         mode: "custom",
         difficulty: "intermediate",
         language: "en",
+        aiProvider: "gemini",
         categoryId: "ocd",
       },
       expect.any(String),
     );
   });
 
-  it("keeps Begin consultation usable with clear unreviewed notice when practice cases have reviewed=false", async () => {
+  it("keeps Begin consultation usable with clear unreviewed notice when practice cases have reviewed=false and supports GPT-6 Luna selection", async () => {
     apiMocks.availableScenarios.mockResolvedValue([
       { available: true, categoryId: "depressive", difficulty: "beginner", reviewed: false },
     ]);
+    apiMocks.create.mockResolvedValue({ id: "sess-luna" });
+    const user = userEvent.setup();
     renderNewSession();
 
     expect(await screen.findByRole("status")).toHaveTextContent(
       "unreviewed fictional educational cases",
     );
-    expect(
-      screen.getByRole("button", { name: "Begin consultation" }),
-    ).toBeEnabled();
+    await user.click(screen.getByRole("button", { name: /GPT-6 Luna/i }));
+    const startBtn = screen.getByRole("button", { name: "Begin consultation" });
+    expect(startBtn).toBeEnabled();
+    await user.click(startBtn);
+
+    expect(await screen.findByText("Consultation started")).toBeInTheDocument();
+    expect(apiMocks.create).toHaveBeenCalledWith(
+      {
+        mode: "challenge",
+        difficulty: "beginner",
+        language: "en",
+        aiProvider: "gpt-luna",
+      },
+      expect.any(String),
+    );
   });
 });

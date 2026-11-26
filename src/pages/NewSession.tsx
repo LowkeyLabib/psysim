@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { ArrowRight, Check, Layers3, Sparkles } from "lucide-react";
+import { ArrowRight, Check, Cpu, Layers3, Sparkles } from "lucide-react";
 import type {
+  AIModelProvider,
   Category,
   Difficulty,
   Language,
@@ -10,7 +11,7 @@ import type {
 } from "../../shared/contracts";
 import { api } from "../lib/api";
 import { demoMode, localDevelopment } from "../lib/config";
-import { errorMessage, languageNames } from "../lib/session";
+import { aiProviderNames, errorMessage, languageNames } from "../lib/session";
 import { ErrorNotice, PageTitle } from "../components/ui";
 const difficulties: {
   id: Difficulty;
@@ -47,6 +48,7 @@ export default function NewSession() {
   );
   const [difficulty, setDifficulty] = useState<Difficulty>("beginner");
   const [language, setLanguage] = useState<Language>("en");
+  const [aiProvider, setAiProvider] = useState<AIModelProvider>("gemini");
   const [category, setCategory] = useState("");
   const [categories, setCategories] = useState<Category[]>([]);
   const [available, setAvailable] = useState<ScenarioAvailability[] | null>(
@@ -112,6 +114,7 @@ export default function NewSession() {
       mode,
       difficulty,
       language,
+      aiProvider,
       ...(mode === "custom" ? { categoryId: category } : {}),
     };
     const payload = JSON.stringify(input);
@@ -239,6 +242,45 @@ export default function NewSession() {
               Bengali, Banglish, and natural code-switching are welcome.
             </p>
           </section>
+          <section className="setup-section">
+            <div className="step-title">
+              <span>04</span>
+              <h2>Choose AI model</h2>
+            </div>
+            <div className="mode-grid">
+              {(
+                [
+                  {
+                    id: "gemini",
+                    name: aiProviderNames.gemini,
+                    icon: Sparkles,
+                    text: "Fast multilingual clinical simulation in English, বাংলা, and Banglish.",
+                  },
+                  {
+                    id: "gpt-luna",
+                    name: aiProviderNames["gpt-luna"],
+                    icon: Cpu,
+                    text: "High-reasoning conversational patient model powered by GPT-6 Luna.",
+                  },
+                ] as const
+              ).map((m) => (
+                <button
+                  type="button"
+                  key={m.id}
+                  className={`choice-card ${aiProvider === m.id ? "selected" : ""}`}
+                  aria-pressed={aiProvider === m.id}
+                  onClick={() => setAiProvider(m.id)}
+                >
+                  <m.icon size={24} />
+                  <span className="choice-check">
+                    {aiProvider === m.id && <Check size={14} />}
+                  </span>
+                  <h3>{m.name}</h3>
+                  <p>{m.text}</p>
+                </button>
+              ))}
+            </div>
+          </section>
         </div>
         <aside className="session-summary panel">
           <span className="eyebrow">BEFORE YOU BEGIN</span>
@@ -268,6 +310,8 @@ export default function NewSession() {
             </strong>
             <span>Language</span>
             <strong>{languageNames[language]}</strong>
+            <span>AI model</span>
+            <strong>{aiProviderNames[aiProvider]}</strong>
           </div>
           {demoMode && (
             <p className="demo-note">

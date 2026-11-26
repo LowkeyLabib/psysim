@@ -1,6 +1,7 @@
 import { it, expect, vi, afterEach } from "vitest";
 import { PatientSimulationEngine } from "../src/simulation/engine";
 import { GeminiProvider } from "../src/ai/gemini";
+import { GptLunaProvider } from "../src/ai/gptLuna";
 import { SEED_SCENARIOS } from "../src/knowledge/seedScenarios";
 import { AppError } from "../src/middleware/AppError";
 const scenario = SEED_SCENARIOS[0];
@@ -108,4 +109,59 @@ it("retries rate limits once and returns a safe error, never provider response t
     ]),
   ).rejects.toMatchObject({ status: 429, code: "AI_RATE_LIMITED" });
   expect(fetch).toHaveBeenCalledTimes(2);
+});
+it("supports GPT-6 Luna Bearer auth, structured JSON, incomplete checks, and safe 429 retries", async () => {
+  const fetch = vi
+    .fn()
+    .mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          choices: [
+            {
+              finish_reason: "stop",
+              message: { content: '{"objectives":[]}' },
+            },
+          ],
+        }),
+      ),
+    )
+    .mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          choices: [
+            {
+              finish_reason: "length",
+              message: { content: "Partial" },
+            },
+          ],
+        }),
+      ),
+    )
+    .mockResolvedValueOnce(new Response("upstream-secret", { status: 429 }))
+    .mockResolvedValueOnce(new Response("upstream-secret", { status: 429 }));
+  vi.stubGlobal("fetch", fetch);
+
+  const luna = new GptLunaProvider(
+    "luna-secret",
+    "openai/gpt-6-luna",
+    "https://tokens.bd/v1",
+  );
+  expect(await luna.generateStructured("Assess evidence")).toEqual({
+    objectives: [],
+  });
+  expect(fetch.mock.calls[0][0]).toBe("https://tokens.bd/v1/chat/completions");
+  expect(fetch.mock.calls[0][1].headers.Authorization).toBe("Bearer luna-secret");
+  const firstBody = JSON.parse(fetch.mock.calls[0][1].body as string);
+  expect(firstBody.model).toBe("openai/gpt-6-luna");
+  expect(firstBody.max_tokens).toBeGreaterThanOrEqual(4096);
+  expect(firstBody.response_format).toEqual({ type: "json_object" });
+
+  await expect(
+    luna.generateChat([{ role: "user", content: "Hello" }]),
+  ).rejects.toMatchObject({ code: "AI_INCOMPLETE_RESPONSE" });
+
+  await expect(
+    luna.generateChat([{ role: "user", content: "Retry test" }]),
+  ).rejects.toMatchObject({ status: 429, code: "AI_RATE_LIMITED" });
+  expect(fetch).toHaveBeenCalledTimes(4);
 });

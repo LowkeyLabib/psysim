@@ -3,6 +3,7 @@ import type {
   Mode,
   Difficulty,
   Language,
+  AIModelProvider,
   SessionState,
   Outcome,
   UserProfile,
@@ -28,6 +29,7 @@ export type {
   Mode,
   Difficulty,
   Language,
+  AIModelProvider,
   SessionState,
   Outcome,
   UserProfile,
@@ -113,6 +115,7 @@ export const CreateSessionZod = z
     difficulty: z.enum(["beginner", "intermediate", "advanced"]),
     language: z.enum(["en", "bn", "banglish", "mixed"]).default("en"),
     categoryId: z.string().trim().min(1).optional(),
+    aiProvider: z.enum(["gemini", "gpt-luna"]).optional(),
   })
   .refine(
     (v) => v.mode !== "custom" || !!v.categoryId,

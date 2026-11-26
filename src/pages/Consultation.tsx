@@ -15,6 +15,7 @@ import {
 import type { PublicSession } from "../../shared/contracts";
 import { api, ApiError } from "../lib/api";
 import {
+  aiProviderNames,
   canSubmit,
   errorMessage,
   isActive,
@@ -162,6 +163,9 @@ export default function Consultation() {
           {session.mode === "challenge" ? "Clinical Challenge" : "Custom Case"}
         </span>
         <span className="badge">{label(session.difficulty)}</span>
+        {session.aiProvider && (
+          <span className="badge">{aiProviderNames[session.aiProvider]}</span>
+        )}
         <Timer
           start={session.createdAt}
           end={isActive(session) ? undefined : session.updatedAt}

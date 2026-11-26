@@ -40,6 +40,10 @@ app.get("/api/health", (_req, res) =>
   res.json({
     status: "healthy",
     provider: config.aiProvider,
+    providers: {
+      gemini: Boolean(config.gemini.apiKey),
+      gptLuna: Boolean(config.gptLuna.apiKey),
+    },
     development: config.nodeEnv !== "production",
     unreviewedCases: config.allowUnreviewed,
     neon: {

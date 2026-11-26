@@ -10,6 +10,7 @@ import {
   Mode,
   Difficulty,
   Language,
+  AIModelProvider,
 } from "../types";
 import { AppError } from "../middleware/AppError";
 import { SCENARIO_CATEGORIES } from "../knowledge/seedScenarios.js";
@@ -37,6 +38,7 @@ export interface CreateData {
   mode: Mode;
   difficulty: Difficulty;
   language: Language;
+  aiProvider?: AIModelProvider;
   isLive: boolean;
   receipt?: { key: string; signature: string };
 }
@@ -191,6 +193,7 @@ export class InMemoryRepository implements IRepository {
           })),
         },
         simulation: data.isLive ? "live" : "mock",
+        ...(data.aiProvider ? { aiProvider: data.aiProvider } : {}),
         caseReviewStatus: profile.reviewStatus,
       };
       this.state.sessions[id] = session;

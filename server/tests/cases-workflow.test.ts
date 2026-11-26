@@ -308,16 +308,41 @@ describe("clinical case availability, approvals, and simulation modes", () => {
       .post("/api/sessions")
       .set("Authorization", "Bearer student")
       .set("Idempotency-Key", "k-unrev-ch")
-      .send({ mode: "challenge", difficulty: "beginner", language: "en" });
+      .send({
+        mode: "challenge",
+        difficulty: "beginner",
+        language: "en",
+        aiProvider: "gpt-luna",
+      });
     expect(ch.status).toBe(201);
     expect(ch.body.caseReviewStatus).toBe("DRAFT");
+    expect(ch.body.aiProvider).toBe("gpt-luna");
 
     const cu = await request(app)
       .post("/api/sessions")
       .set("Authorization", "Bearer student")
       .set("Idempotency-Key", "k-unrev-cu")
-      .send({ mode: "custom", categoryId: "depressive", difficulty: "beginner", language: "bn" });
+      .send({
+        mode: "custom",
+        categoryId: "depressive",
+        difficulty: "beginner",
+        language: "bn",
+        aiProvider: "gemini",
+      });
     expect(cu.status).toBe(201);
     expect(cu.body.caseReviewStatus).toBe("DRAFT");
+    expect(cu.body.aiProvider).toBe("gemini");
+
+    const invalidModel = await request(app)
+      .post("/api/sessions")
+      .set("Authorization", "Bearer student")
+      .set("Idempotency-Key", "k-unrev-bad-model")
+      .send({
+        mode: "challenge",
+        difficulty: "beginner",
+        language: "en",
+        aiProvider: "unknown-model",
+      });
+    expect(invalidModel.status).toBe(422);
   });
 });

@@ -2,6 +2,7 @@
 export type Mode = "challenge" | "custom";
 export type Difficulty = "beginner" | "intermediate" | "advanced";
 export type Language = "en" | "bn" | "banglish" | "mixed";
+export type AIModelProvider = "gemini" | "gpt-luna";
 export type SessionState =
   | "CREATED"
   | "IN_PROGRESS"
@@ -34,6 +35,7 @@ export interface CreateSessionInput {
   difficulty: Difficulty;
   language: Language;
   categoryId?: string;
+  aiProvider?: AIModelProvider;
 }
 export interface Message {
   id: string;
@@ -73,6 +75,7 @@ export interface PublicSession {
   messages: Message[];
   progress: InterviewProgress;
   simulation: "live" | "mock";
+  aiProvider?: AIModelProvider;
 }
 export interface SessionSummary {
   id: string;

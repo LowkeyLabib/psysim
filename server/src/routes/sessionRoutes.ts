@@ -13,7 +13,6 @@ import { InterviewEvaluator } from "../interview/evaluator";
 import { DiagnosisMatcher } from "../diagnosis/matcher";
 import { FeedbackGenerator } from "../feedback/rubric";
 import { AppError } from "../middleware/AppError";
-import { config } from "../config";
 export const sessionRoutes = Router();
 export const simulationEngine = new PatientSimulationEngine();
 const hash = (s: string) => createHash("sha256").update(s).digest("hex");
@@ -66,13 +65,20 @@ sessionRoutes.post("/", async (req, res, next) => {
             : "No reviewed case is available for this difficulty.",
         );
       const scenario = available[Math.floor(Math.random() * available.length)];
+      const selectedProvider = simulationEngine.resolveProvider(body.aiProvider);
+      const storedAiProvider =
+        body.aiProvider ||
+        (selectedProvider.name === "gpt-luna" || selectedProvider.name === "gemini"
+          ? selectedProvider.name
+          : undefined);
       return repository.createSession({
         userId: req.user!.id,
         scenario,
         mode: body.mode,
         difficulty: body.difficulty,
         language: body.language,
-        isLive: simulationEngine.provider.name !== "mock",
+        aiProvider: storedAiProvider,
+        isLive: selectedProvider.name !== "mock",
         receipt: r,
       });
     });
@@ -126,11 +132,15 @@ sessionRoutes.post("/:id/messages", async (req, res, next) => {
             "PROFILE_MISSING",
             "The case could not be loaded.",
           );
+        const sessionProvider = simulationEngine.resolveProvider(
+          session.aiProvider,
+        );
         const { response } = await simulationEngine.generatePatientResponse(
           profile,
           session.messages,
           body.content,
           session.language,
+          sessionProvider,
         );
         session.messages.push(
           {
@@ -150,7 +160,7 @@ sessionRoutes.post("/:id/messages", async (req, res, next) => {
           session.messages,
           profile,
           session.progress.objectives,
-          simulationEngine.provider,
+          sessionProvider,
         );
         session.state = session.progress.eligible
           ? "INTERVIEW_COMPLETE"
@@ -216,10 +226,13 @@ sessionRoutes.post("/:id/diagnosis", async (req, res, next) => {
             "PROFILE_MISSING",
             "The case could not be loaded.",
           );
+        const sessionProvider = simulationEngine.resolveProvider(
+          session.aiProvider,
+        );
         const matchResult = await DiagnosisMatcher.assess(
           body.diagnosis,
           scenario,
-          simulationEngine.provider,
+          sessionProvider,
         );
         const evaluation = FeedbackGenerator.generateEvaluation({
           sessionId: session.id,

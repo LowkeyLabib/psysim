@@ -13,12 +13,21 @@ export const config = {
   host: process.env.HOST || "127.0.0.1",
   aiProvider: (process.env.AI_PROVIDER || "mock") as
     | "gemini"
+    | "gpt-luna"
     | "groq"
     | "neon-ai-gateway"
     | "mock",
   gemini: {
     apiKey: process.env.GEMINI_API_KEY || "",
     model: process.env.GEMINI_MODEL || "gemini-3.5-flash-lite",
+  },
+  gptLuna: {
+    apiKey: process.env.GPT_LUNA_API_KEY || "",
+    baseUrl: (process.env.GPT_LUNA_BASE_URL || "https://tokens.bd/v1").replace(
+      /\/$/,
+      "",
+    ),
+    model: process.env.GPT_LUNA_MODEL || "openai/gpt-6-luna",
   },
   groq: {
     apiKey: process.env.GROQ_API_KEY || "",
