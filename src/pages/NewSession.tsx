@@ -197,54 +197,6 @@ export default function NewSession() {
           <section className="setup-section">
             <div className="step-title">
               <span>02</span>
-              <h2>Find your level</h2>
-            </div>
-            <div className="difficulty-grid">
-              {difficulties.map((d, i) => (
-                <button
-                  type="button"
-                  key={d.id}
-                  aria-pressed={difficulty === d.id}
-                  onClick={() => setDifficulty(d.id)}
-                  className={`choice-card difficulty ${difficulty === d.id ? "selected" : ""}`}
-                >
-                  <span className="level-bars">
-                    {[0, 1, 2].map((n) => (
-                      <i key={n} className={n <= i ? "filled" : ""} />
-                    ))}
-                  </span>
-                  <h3>{d.title}</h3>
-                  <span className="tiny-label">{d.note}</span>
-                  <p>{d.detail}</p>
-                </button>
-              ))}
-            </div>
-          </section>
-          <section className="setup-section">
-            <div className="step-title">
-              <span>03</span>
-              <h2>Speak naturally</h2>
-            </div>
-            <label>
-              Conversation language
-              <select
-                value={language}
-                onChange={(e) => setLanguage(e.target.value as Language)}
-              >
-                {Object.entries(languageNames).map(([key, name]) => (
-                  <option key={key} value={key}>
-                    {name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <p className="muted">
-              Bengali, Banglish, and natural code-switching are welcome.
-            </p>
-          </section>
-          <section className="setup-section">
-            <div className="step-title">
-              <span>04</span>
               <h2>Choose AI model</h2>
             </div>
             <div className="mode-grid">
@@ -280,6 +232,54 @@ export default function NewSession() {
                 </button>
               ))}
             </div>
+          </section>
+          <section className="setup-section">
+            <div className="step-title">
+              <span>03</span>
+              <h2>Find your level</h2>
+            </div>
+            <div className="difficulty-grid">
+              {difficulties.map((d, i) => (
+                <button
+                  type="button"
+                  key={d.id}
+                  aria-pressed={difficulty === d.id}
+                  onClick={() => setDifficulty(d.id)}
+                  className={`choice-card difficulty ${difficulty === d.id ? "selected" : ""}`}
+                >
+                  <span className="level-bars">
+                    {[0, 1, 2].map((n) => (
+                      <i key={n} className={n <= i ? "filled" : ""} />
+                    ))}
+                  </span>
+                  <h3>{d.title}</h3>
+                  <span className="tiny-label">{d.note}</span>
+                  <p>{d.detail}</p>
+                </button>
+              ))}
+            </div>
+          </section>
+          <section className="setup-section">
+            <div className="step-title">
+              <span>04</span>
+              <h2>Speak naturally</h2>
+            </div>
+            <label>
+              Conversation language
+              <select
+                value={language}
+                onChange={(e) => setLanguage(e.target.value as Language)}
+              >
+                {Object.entries(languageNames).map(([key, name]) => (
+                  <option key={key} value={key}>
+                    {name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <p className="muted">
+              Bengali, Banglish, and natural code-switching are welcome.
+            </p>
           </section>
         </div>
         <aside className="session-summary panel">
